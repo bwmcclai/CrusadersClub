@@ -1,8 +1,14 @@
+'use client'
+
+import React, { useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { motion } from 'framer-motion'
 import Navbar from '@/components/layout/Navbar'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
+import SplashScreen from '@/components/ui/SplashScreen'
+import ParticleBackground from '@/components/ui/ParticleBackground'
 import { Sword, Map, Users, Zap, Globe, Shield, Trophy, ChevronRight, Star } from 'lucide-react'
 
 const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), {
@@ -14,32 +20,11 @@ const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), {
   ),
 })
 
-// ─── Feature Cards ────────────────────────────────────────────────────────────
 const features = [
-  {
-    icon: Globe,
-    title: 'World Map Creator',
-    desc: 'Pick any region on Earth — continent, country, or custom zone. Auto-generate territories and share your map with the community.',
-    color: 'text-crusader-glow',
-  },
-  {
-    icon: Zap,
-    title: 'Lightning Battles',
-    desc: '1-minute turns, fast-paced combat. No time for hesitation — plan your offensive and strike hard.',
-    color: 'text-crusader-gold',
-  },
-  {
-    icon: Users,
-    title: 'Multiplayer & AI',
-    desc: 'Challenge friends, strangers, or battle-hardened AI opponents at any skill level.',
-    color: 'text-crusader-crimson-bright',
-  },
-  {
-    icon: Shield,
-    title: 'Slow Diplomacy',
-    desc: '1-hour or 1-day turns for deep strategic play. Form alliances, break them, and rewrite history.',
-    color: 'text-crusader-gold',
-  },
+  { icon: Globe, title: 'World Map Creator', desc: 'Pick any region on Earth. Auto-generate territories and share your map.', color: 'text-crusader-glow' },
+  { icon: Zap, title: 'Lightning Battles', desc: '1-minute turns, fast-paced combat. Strike hard and fast.', color: 'text-crusader-gold' },
+  { icon: Users, title: 'Multiplayer & AI', desc: 'Challenge friends or battle-hardened AI opponents at any skill level.', color: 'text-crusader-crimson-bright' },
+  { icon: Shield, title: 'Slow Diplomacy', desc: '1-hour or 1-day turns for deep strategic play. Rewrite history.', color: 'text-crusader-gold' },
 ]
 
 const stats = [
@@ -49,232 +34,189 @@ const stats = [
   { value: '99.9%', label: 'Uptime' },
 ]
 
+const fadeInUp = {
+  hidden: { opacity: 0, y: 50 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: 'easeOut' } }
+}
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.2 }
+  }
+}
+
 export default function LandingPage() {
+  const [introFinished, setIntroFinished] = useState(false)
+
   return (
-    <div className="min-h-screen bg-crusader-void overflow-hidden">
-      <Navbar />
+    <div className="min-h-screen bg-crusader-void overflow-hidden selection:bg-crusader-gold/30">
+      <SplashScreen onComplete={() => setIntroFinished(true)} />
 
-      {/* ── Hero ──────────────────────────────────────────────────────────── */}
-      <section className="relative h-screen flex items-center">
-        {/* Globe background */}
-        <div className="absolute inset-0 z-0">
-          <EarthGlobe autoRotate interactive={false} className="w-full h-full" />
-          {/* Gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-crusader-void via-crusader-void/80 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-crusader-void via-transparent to-crusader-void/60" />
-        </div>
+      {/* Main UI only becomes visible/interactive after splash */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: introFinished ? 1 : 0 }}
+        transition={{ duration: 1 }}
+        className="relative z-10"
+      >
+        <Navbar />
 
-        {/* Hero content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-10">
-          <div className="max-w-2xl">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-crusader-gold/30 bg-crusader-gold/10 mb-6">
-              <Star size={12} className="text-crusader-gold fill-crusader-gold" />
-              <span className="text-xs font-cinzel tracking-widest text-crusader-gold uppercase">
-                The Modern Strategy Game
-              </span>
+        {/* ── Hero ──────────────────────────────────────────────────────────── */}
+        <section className="relative h-screen flex items-center">
+          {/* Backgrounds */}
+          <div className="absolute inset-0 z-0">
+            <ParticleBackground />
+            <div className="absolute inset-0 opacity-50 mix-blend-screen mix-blend-mode">
+               <EarthGlobe autoRotate interactive={false} className="w-full h-full" />
             </div>
-
-            {/* Title */}
-            <h1 className="font-cinzel font-black leading-tight mb-6">
-              <span className="block text-5xl sm:text-7xl text-white glow-white">
-                CRUSADERS
-              </span>
-              <span className="block text-5xl sm:text-7xl shimmer">
-                CLUB
-              </span>
-            </h1>
-
-            <p className="text-lg sm:text-xl text-crusader-gold-light/70 mb-8 leading-relaxed max-w-xl">
-              Command armies. Conquer continents. Build legendary maps and
-              battle players across the globe in real-time or slow-burn strategy.
-            </p>
-
-            <div className="flex flex-wrap gap-4">
-              <Link href="/lobby">
-                <Button size="xl" variant="gold" icon={<Sword size={20} />}>
-                  Start Playing
-                </Button>
-              </Link>
-              <Link href="/map-creator">
-                <Button size="xl" variant="outline" icon={<Map size={20} />}>
-                  Create a Map
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-float">
-          <span className="text-xs font-cinzel tracking-widest text-crusader-gold/40 uppercase">Scroll</span>
-          <div className="w-px h-8 bg-gradient-to-b from-crusader-gold/40 to-transparent" />
-        </div>
-      </section>
-
-      {/* ── Stats Bar ─────────────────────────────────────────────────────── */}
-      <section className="relative z-10 py-8 border-y border-crusader-gold/10 bg-crusader-navy/30">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map(({ value, label }) => (
-              <div key={label} className="text-center">
-                <div className="font-cinzel text-3xl font-bold text-crusader-gold glow-gold">{value}</div>
-                <div className="text-sm text-crusader-gold-light/50 mt-1 font-medium tracking-wide uppercase">{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Features ──────────────────────────────────────────────────────── */}
-      <section className="py-24 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="font-cinzel text-4xl font-bold text-crusader-gold mb-4 glow-gold">
-              Built for Glory
-            </h2>
-            <p className="text-crusader-gold-light/60 text-lg max-w-xl mx-auto">
-              Everything you need for epic strategic battles, beautifully crafted.
-            </p>
+            {/* Cinematic Gradients */}
+            <div className="absolute inset-0 bg-gradient-to-r from-crusader-void via-crusader-void/80 to-transparent z-10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-crusader-void via-transparent to-crusader-void/80 z-10" />
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {features.map(({ icon: Icon, title, desc, color }) => (
-              <Card key={title} hover glow="gold" className="p-8 group">
-                <div className={`w-12 h-12 rounded-xl bg-crusader-navy flex items-center justify-center mb-5 group-hover:scale-110 transition-transform ${color}`}>
-                  <Icon size={24} />
-                </div>
-                <h3 className="font-cinzel text-xl font-semibold text-crusader-gold mb-3">{title}</h3>
-                <p className="text-crusader-gold-light/60 leading-relaxed">{desc}</p>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+          <div className="relative z-20 max-w-7xl mx-auto px-6 sm:px-10">
+            <motion.div 
+              initial="hidden"
+              animate={introFinished ? "visible" : "hidden"}
+              variants={staggerContainer}
+              className="max-w-2xl"
+            >
+              <motion.div variants={fadeInUp} className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-crusader-gold/30 glass mb-6">
+                <Star size={12} className="text-crusader-gold fill-crusader-gold" />
+                <span className="text-xs font-cinzel tracking-widest text-crusader-gold uppercase">The Modern Strategy Game</span>
+              </motion.div>
 
-      {/* ── How to Play ───────────────────────────────────────────────────── */}
-      <section className="py-24 px-6 bg-crusader-navy/20">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="font-cinzel text-4xl font-bold text-crusader-gold mb-4 glow-gold">
-              How It Works
-            </h2>
-          </div>
+              <motion.h1 variants={fadeInUp} className="font-cinzel font-black leading-tight mb-6 drop-shadow-2xl">
+                <span className="block text-5xl sm:text-7xl text-white glow-white">COMMAND</span>
+                <span className="block text-5xl sm:text-7xl text-white glow-white">THE <span className="text-transparent bg-clip-text bg-gradient-to-r from-crusader-gold to-crusader-gold-light shimmer">WORLD</span></span>
+              </motion.h1>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { step: '01', title: 'Choose Your Battle', desc: 'Browse community maps or create your own from the interactive world globe.' },
-              { step: '02', title: 'Assemble Your Forces', desc: 'Set up a game with friends or matchmake against global opponents and AI.' },
-              { step: '03', title: 'Conquer & Reign', desc: 'Deploy armies, attack territories, and outlast every other commander.' },
-            ].map(({ step, title, desc }) => (
-              <div key={step} className="relative">
-                <div className="font-cinzel text-6xl font-black text-crusader-gold/10 mb-4 leading-none">{step}</div>
-                <h3 className="font-cinzel text-xl font-semibold text-crusader-gold mb-3">{title}</h3>
-                <p className="text-crusader-gold-light/60 leading-relaxed">{desc}</p>
-                <div className="absolute top-8 -right-4 hidden md:block last:hidden">
-                  <ChevronRight size={20} className="text-crusader-gold/30" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+              <motion.p variants={fadeInUp} className="text-lg sm:text-xl text-crusader-gold-light/70 mb-8 leading-relaxed max-w-xl">
+                Lead armies. Conquer continents. Build legendary maps and
+                battle players across the globe in a breathtaking AAA strategy experience.
+              </motion.p>
 
-      {/* ── Game Modes ────────────────────────────────────────────────────── */}
-      <section className="py-24 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="font-cinzel text-4xl font-bold text-crusader-gold mb-4 glow-gold">
-              Choose Your Pace
-            </h2>
+              <motion.div variants={fadeInUp} className="flex flex-wrap gap-4">
+                <Link href="/lobby">
+                  <Button size="xl" variant="gold" icon={<Sword size={20} />}>Start Playing</Button>
+                </Link>
+                <Link href="/map-creator">
+                  <Button size="xl" variant="outline" icon={<Map size={20} />}>Create a Map</Button>
+                </Link>
+              </motion.div>
+            </motion.div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Lightning */}
-            <Card glow="gold" className="p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-crusader-gold/5 rounded-bl-full" />
-              <Zap size={40} className="text-crusader-gold mb-5" />
-              <h3 className="font-cinzel text-2xl font-bold text-crusader-gold mb-3">⚡ Lightning</h3>
-              <p className="text-crusader-gold-light/60 mb-5 leading-relaxed">
-                1 minute per turn. Fast-paced, intense battles where every second counts.
-                Perfect for quick sessions or competitive play.
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: introFinished ? 1 : 0 }}
+            transition={{ delay: 2, duration: 1 }}
+            className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-float z-20"
+          >
+            <span className="text-xs font-cinzel tracking-widest text-crusader-gold/40 uppercase">Initialize</span>
+            <div className="w-px h-8 bg-gradient-to-b from-crusader-gold/40 to-transparent" />
+          </motion.div>
+        </section>
+
+        {/* ── Stats Bar ─────────────────────────────────────────────────────── */}
+        <section className="relative z-20 py-10 border-y border-white/5 glass-dark backdrop-blur-3xl">
+          <div className="max-w-7xl mx-auto px-6">
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: '-50px' }}
+              variants={staggerContainer}
+              className="grid grid-cols-2 md:grid-cols-4 gap-8"
+            >
+              {stats.map(({ value, label }) => (
+                <motion.div key={label} variants={fadeInUp} className="text-center group">
+                  <div className="font-cinzel text-4xl font-black text-white drop-shadow-lg group-hover:scale-110 transition-transform duration-300">{value}</div>
+                  <div className="text-sm text-crusader-gold mt-2 font-bold tracking-widest uppercase">{label}</div>
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ── Features ──────────────────────────────────────────────────────── */}
+        <section className="py-32 px-6 relative z-10">
+          <div className="absolute inset-0 bg-radial-glow opacity-20 pointer-events-none" />
+          <div className="max-w-7xl mx-auto relative z-10">
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeInUp}
+              className="text-center mb-20"
+            >
+              <h2 className="font-cinzel text-5xl font-black text-white mb-6 drop-shadow-2xl">Forged for <span className="text-crusader-gold glow-gold">Glory</span></h2>
+              <p className="text-crusader-gold-light/60 text-lg max-w-2xl mx-auto">
+                Next-generation web technology powers an uncompromised tactical warfare experience right in your browser.
               </p>
-              <div className="flex flex-wrap gap-2">
-                {['Fast-paced', 'Competitive', '30-90 min games'].map((tag) => (
-                  <span key={tag} className="px-3 py-1 rounded-full bg-crusader-gold/10 text-crusader-gold text-xs font-medium border border-crusader-gold/20">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </Card>
+            </motion.div>
 
-            {/* Slow */}
-            <Card glow="blue" className="p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-crusader-glow/5 rounded-bl-full" />
-              <Shield size={40} className="text-crusader-glow mb-5" />
-              <h3 className="font-cinzel text-2xl font-bold text-crusader-glow mb-3">⏱ Slow & Strategic</h3>
-              <p className="text-crusader-gold-light/60 mb-5 leading-relaxed">
-                1 hour or 1 day per turn. Deep diplomacy, long-term planning, and epic
-                multi-week campaigns across vast maps.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {['Deep strategy', 'Diplomatic', 'Days-long epics'].map((tag) => (
-                  <span key={tag} className="px-3 py-1 rounded-full bg-crusader-glow/10 text-crusader-glow text-xs font-medium border border-crusader-glow/20">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </Card>
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={staggerContainer}
+              className="grid md:grid-cols-2 gap-8"
+            >
+              {features.map(({ icon: Icon, title, desc, color }) => (
+                <motion.div key={title} variants={fadeInUp}>
+                  <Card hover glow="gold" className="p-8 h-full glass-deep isolate overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-crusader-gold/5 blur-3xl rounded-full transform translate-x-1/2 -translate-y-1/2 group-hover:bg-crusader-gold/10 transition-colors duration-500" />
+                    <div className={`w-14 h-14 rounded-2xl glass flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 ${color} shadow-lg relative z-10`}>
+                      <Icon size={28} />
+                    </div>
+                    <h3 className="font-cinzel text-2xl font-bold text-white mb-4 relative z-10">{title}</h3>
+                    <p className="text-crusader-gold-light/60 leading-relaxed text-lg relative z-10">{desc}</p>
+                  </Card>
+                </motion.div>
+              ))}
+            </motion.div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── CTA ───────────────────────────────────────────────────────────── */}
-      <section className="py-24 px-6 relative overflow-hidden">
-        <div className="absolute inset-0 bg-radial-gold opacity-50" />
-        <div className="relative max-w-3xl mx-auto text-center">
-          <h2 className="font-cinzel text-4xl sm:text-5xl font-black text-crusader-gold glow-gold mb-6">
-            Your Conquest Awaits
-          </h2>
-          <p className="text-xl text-crusader-gold-light/60 mb-10 leading-relaxed">
-            Join thousands of commanders already battling for supremacy. Free to play.
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/auth/register">
-              <Button size="xl" variant="gold" icon={<Sword size={20} />}>
-                Create Free Account
-              </Button>
-            </Link>
-            <Link href="/lobby">
-              <Button size="xl" variant="outline">
-                Browse Open Games
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
+        {/* ── CTA ───────────────────────────────────────────────────────────── */}
+        <section className="py-32 px-6 relative z-10 overflow-hidden border-t border-white/5 glass-dark">
+          <div className="absolute inset-0 bg-radial-gold opacity-40 pointer-events-none" />
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={staggerContainer}
+            className="relative max-w-4xl mx-auto text-center z-10"
+          >
+            <motion.h2 variants={fadeInUp} className="font-cinzel text-5xl sm:text-7xl font-black text-white drop-shadow-2xl mb-8">
+              Your Conquest <span className="text-crusader-gold glow-gold">Awaits</span>
+            </motion.h2>
+            <motion.p variants={fadeInUp} className="text-xl text-crusader-gold-light/70 mb-12 flex items-center justify-center gap-4">
+              <span className="h-px w-12 bg-crusader-gold/30" />
+              Join the elite commanders. Free to play.
+              <span className="h-px w-12 bg-crusader-gold/30" />
+            </motion.p>
+            <motion.div variants={fadeInUp} className="flex flex-wrap justify-center gap-6">
+              <Link href="/auth/register">
+                <Button size="xl" variant="gold" icon={<Sword size={24} />} className="text-xl px-12 py-5 shadow-[0_0_40px_rgba(201,168,76,0.5)]">Deploy Now</Button>
+              </Link>
+            </motion.div>
+          </motion.div>
+        </section>
 
-      {/* ── Footer ────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-crusader-gold/10 py-12 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <Sword size={20} className="text-crusader-gold" />
-              <span className="font-cinzel font-bold text-lg tracking-widest text-crusader-gold">
-                CRUSADERS CLUB
-              </span>
+        {/* ── Footer ────────────────────────────────────────────────────────── */}
+        <footer className="border-t border-white/10 py-12 px-6 glass-deep relative z-20">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <img src="/CrusadersClub_LOGO.png" alt="Logo" className="w-8 h-8 opacity-80 mix-blend-screen" />
+              <span className="font-cinzel font-bold text-xl tracking-widest text-white/50">CRUSADERS CLUB</span>
             </div>
-            <p className="text-crusader-gold-light/30 text-sm">
-              © 2025 Crusaders Club. All rights reserved.
-            </p>
-            <div className="flex gap-6 text-sm text-crusader-gold-light/40">
-              <a href="#" className="hover:text-crusader-gold transition-colors">Privacy</a>
-              <a href="#" className="hover:text-crusader-gold transition-colors">Terms</a>
-              <a href="#" className="hover:text-crusader-gold transition-colors">Discord</a>
-            </div>
+            <p className="text-crusader-gold-light/30 text-sm">© 2026 Crusaders Club. All rights reserved.</p>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </motion.div>
     </div>
   )
 }

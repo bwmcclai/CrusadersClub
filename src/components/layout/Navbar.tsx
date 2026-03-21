@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { Sword, Map, Users, Trophy, User, Menu, X, ChevronDown } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 const navLinks = [
@@ -17,21 +18,20 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-40 glass-dark border-b border-crusader-gold/10">
+    <motion.nav 
+      initial={{ y: -100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.8, ease: 'easeOut' }}
+      className="fixed top-0 left-0 right-0 z-40 glass-deep border-b border-white/5"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative w-8 h-8">
-              <div className="absolute inset-0 rounded-full bg-crusader-gold/20 group-hover:bg-crusader-gold/30 transition-colors" />
-              <Sword
-                size={18}
-                className="absolute inset-0 m-auto text-crusader-gold group-hover:scale-110 transition-transform"
-              />
+            <div className="relative w-10 h-10 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full bg-crusader-gold/10 group-hover:bg-crusader-gold/20 transition-colors blur-md" />
+              <img src="/CrusadersClub_LOGO.png" alt="Crusaders Club Logo" className="w-10 h-10 object-contain drop-shadow-lg group-hover:scale-110 transition-transform relative z-10" />
             </div>
-            <span className="font-cinzel font-bold text-lg tracking-widest text-crusader-gold glow-gold">
-              CRUSADERS
-            </span>
           </Link>
 
           {/* Desktop links */}
@@ -109,6 +109,6 @@ export default function Navbar() {
           <Link href="/auth/register" onClick={() => setMobileOpen(false)} className="px-4 py-3 text-sm font-cinzel text-crusader-gold font-bold tracking-wide uppercase">Join the Club</Link>
         </div>
       )}
-    </nav>
+    </motion.nav>
   )
 }

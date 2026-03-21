@@ -1,11 +1,12 @@
 'use client'
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { motion, HTMLMotionProps } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 type Variant = 'gold' | 'outline' | 'ghost' | 'danger' | 'ice'
 type Size    = 'sm' | 'md' | 'lg' | 'xl'
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'ref'> {
   variant?:  Variant
   size?:     Size
   children:  ReactNode
@@ -52,8 +53,10 @@ const sizes: Record<Size, string> = {
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = 'gold', size = 'md', className, children, loading, icon, fullWidth, disabled, ...props }, ref) => {
     return (
-      <button
+      <motion.button
         ref={ref}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.95 }}
         disabled={disabled || loading}
         className={cn(
           'relative inline-flex items-center justify-center font-cinzel tracking-widest uppercase',
@@ -76,7 +79,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           {icon}
           {children}
         </span>
-      </button>
+      </motion.button>
     )
   },
 )

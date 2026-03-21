@@ -1,4 +1,6 @@
+'use client'
 import { type ReactNode } from 'react'
+import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 interface CardProps {
@@ -18,10 +20,12 @@ const glowMap = {
 
 export default function Card({ children, className, glow = 'gold', hover = false, onClick }: CardProps) {
   return (
-    <div
+    <motion.div
       onClick={onClick}
+      whileHover={hover ? { y: -5, scale: 1.02 } : undefined}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       className={cn(
-        'glass rounded-2xl transition-all duration-300',
+        'glass rounded-2xl transition-shadow duration-300',
         glowMap[glow],
         hover && 'cursor-pointer',
         onClick && 'cursor-pointer',
@@ -29,7 +33,7 @@ export default function Card({ children, className, glow = 'gold', hover = false
       )}
     >
       {children}
-    </div>
+    </motion.div>
   )
 }
 
