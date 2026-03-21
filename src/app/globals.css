@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base ──────────────────────────────────────────────────────────────────── */
+:root {
+  --color-void:    #04060D;
+  --color-dark:    #070B14;
+  --color-navy:    #0D1B2A;
+  --color-gold:    #C9A84C;
+  --color-crimson: #8B1A1A;
+  --color-glow:    #4AAFD4;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background-color: var(--color-void);
+  color: #E8D5A3;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; }
+::-webkit-scrollbar-track  { background: var(--color-dark); }
+::-webkit-scrollbar-thumb  { background: var(--color-gold); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #E8D090; }
+
+/* ── Typography ────────────────────────────────────────────────────────────── */
+.font-cinzel { font-family: 'Cinzel', serif; }
+
+.text-gold       { color: #C9A84C; }
+.text-gold-light { color: #E8D090; }
+.text-glow-blue  { color: #4AAFD4; text-shadow: 0 0 20px #4AAFD488; }
+
+/* ── Glow Effects ──────────────────────────────────────────────────────────── */
+.glow-gold   { text-shadow: 0 0 10px #C9A84C, 0 0 20px #C9A84C88; }
+.glow-blue   { text-shadow: 0 0 10px #4AAFD4, 0 0 20px #4AAFD488; }
+.glow-white  { text-shadow: 0 0 10px #ffffff, 0 0 20px #ffffff44; }
+
+/* ── Glass Cards ────────────────────────────────────────────────────────────── */
+.glass {
+  background: rgba(13, 27, 42, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(201, 168, 76, 0.15);
+}
+
+.glass-dark {
+  background: rgba(4, 6, 13, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(201, 168, 76, 0.1);
+}
+
+/* ── Borders ────────────────────────────────────────────────────────────────── */
+.border-gold    { border-color: rgba(201, 168, 76, 0.4); }
+.border-gold-sm { border-color: rgba(201, 168, 76, 0.15); }
+
+/* ── Dividers ───────────────────────────────────────────────────────────────── */
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #C9A84C66, transparent);
+}
+
+/* ── Canvas ─────────────────────────────────────────────────────────────────── */
+canvas { display: block; }
+
+/* ── Animations ─────────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, #C9A84C44 0%, #E8D09088 50%, #C9A84C44 100%);
+  background-size: 200% auto;
+  animation: shimmer 3s linear infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes borderGlow {
+  0%, 100% { box-shadow: 0 0 5px #C9A84C44, inset 0 0 5px #C9A84C11; }
+  50%       { box-shadow: 0 0 20px #C9A84C88, inset 0 0 10px #C9A84C22; }
+}
+
+.border-animate { animation: borderGlow 3s ease-in-out infinite; }
+
+/* ── Territory SVG styles ───────────────────────────────────────────────────── */
+.territory-path {
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: filter 0.2s ease, opacity 0.2s ease;
+  cursor: pointer;
+}
+.territory-path:hover {
+  filter: brightness(1.4);
+}
+.territory-path.selected {
+  filter: brightness(1.6) drop-shadow(0 0 6px currentColor);
+}
+
+/* ── Scrollable containers ──────────────────────────────────────────────────── */
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
