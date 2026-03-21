@@ -7,14 +7,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Sword, Map, Users, Trophy, User, ChevronRight } from 'lucide-react'
 
 // Dynamic imports
-const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center">
-      <div className="w-32 h-32 rounded-full border-2 border-crusader-gold/30 border-t-crusader-gold animate-spin" />
-    </div>
-  ),
-})
 const ParticleBackground = dynamic(() => import('@/components/ui/ParticleBackground'), { ssr: false })
 
 export default function LandingPage() {
@@ -63,14 +55,16 @@ export default function LandingPage() {
       <div className="absolute inset-0 z-0">
         <ParticleBackground />
 
-        {/* Globe Background integration */}
-        <div className="absolute inset-0 opacity-40 mix-blend-screen pointer-events-none transform scale-110 translate-x-[20%] translate-y-[5%]">
-          <EarthGlobe autoRotate interactive={false} className="w-full h-full" />
+        {/* Static Background Image integration - Aligned to show the background logo perfectly */}
+        <div className="absolute inset-0 pointer-events-none bg-[#04060D]">
+          <img
+            src="/Background.png"
+            alt="Background"
+            className="w-full h-full object-cover object-[15%_15%] md:object-[15%_10%] opacity-100 transition-opacity duration-1000 transform scale-[2.2] translate-x-[-20%] md:scale-[1.02] md:translate-x-[2%] translate-y-[15%] md:translate-y-[2%] filter brightness-110 contrast-[1.05]"
+          />
         </div>
 
-        {/* Cinematic Darkness & Gradients */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#04060D] via-[#04060D]/90 to-transparent z-10 w-2/3 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#04060D] via-transparent to-transparent z-10 pointer-events-none" />
+        {/* Removed dark overlays to keep branding bright as requested */}
       </div>
 
       {/* ── Top Right Auth Actions ──────────────────────────────────────────── */}
@@ -90,26 +84,32 @@ export default function LandingPage() {
       </div>
 
       {/* ── Main Layout ────────────────────────────────────────────────────── */}
-      <div className="relative z-40 h-full w-full max-w-[1920px] mx-auto px-10 md:px-20 pt-20 flex items-center justify-between">
+      <div className="relative z-40 h-full w-full max-w-[1920px] mx-auto px-6 md:px-20 pt-6 md:pt-20 flex flex-col lg:flex-row items-center justify-center lg:justify-between gap-12 lg:gap-0">
 
         {/* Left Side: Logo and Menu */}
-        <div className="flex flex-col gap-10 w-[45vw] lg:w-[40vw] max-w-lg xl:max-w-xl mt-[-5%] ml-8 xl:ml-12 z-50">
-          {/* Epic Logo */}
+        <div className="flex flex-col gap-4 md:gap-6 w-full lg:w-[45vw] lg:max-w-lg xl:max-w-xl  z-50 items-center lg:items-start text-center lg:text-left">
+
+          {/* Mobile-Only Precise Logo */}
           <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 1, ease: 'easeOut' }}
-            className="mb-0"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8 }}
+            className="flex lg:hidden w-full items-center justify-center "
           >
             <img
               src="/CrusadersClub_LOGO.png"
               alt="Crusaders Club"
-              className="w-full max-w-[450px] drop-shadow-[0_0_60px_rgba(201,168,76,0.4)] filter brightness-[1.1]"
+              className="w-full max-w-[280px] md:max-w-[320px] drop-shadow-[0_0_50px_rgba(139,26,26,0.5)] scale-[1.1]"
             />
           </motion.div>
 
+          {/* Empty Space Placeholder to keep button positioning comfortable on desktop */}
+          <div className="hidden lg:block h-28 md:h-44 pointer-events-none" aria-hidden="true" />
+          <div className="lg:hidden h-0" aria-hidden="true" /> {/* Minimal padding for mobile logo */}
+
+
           {/* Huge Main Menu Buttons */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 w-full max-w-[450px] lg:max-w-none">
             {menuItems.map((item, index) => {
               const Icon = item.icon
               return (
@@ -118,33 +118,42 @@ export default function LandingPage() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.8, delay: 0.3 + (index * 0.1) }}
                   key={item.id}
+                  className="w-full"
                 >
                   <Link href={item.href} className="group relative block w-full outline-none focus:outline-none focus:ring-0">
-                    <div className="relative flex items-center gap-4 px-6 py-4 overflow-hidden transition-all duration-300 transform skew-x-[-12deg] bg-[#070B14]/80 border-y border-white/5 border-l-4 border-l-transparent hover:border-l-crusader-gold group-hover:bg-crusader-gold/5 group-hover:border-y-crusader-gold/40 shadow-lg group-hover:shadow-[0_0_30px_rgba(201,168,76,0.2)] ml-4 backdrop-blur-sm">
+                    {/* Metallic Border Stroke Layer */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-crusader-gold/40 via-crusader-gold/5 to-transparent transform skew-x-[-12deg] -translate-x-1 group-hover:translate-x-0 transition-transform duration-300 pointer-events-none" />
 
-                      {/* Animated Scanline Overlay */}
-                      <div className="absolute top-0 right-0 w-32 h-full bg-gradient-to-l from-white/[0.05] to-transparent transform translate-x-[200%] group-hover:translate-x-[-100%] transition-transform duration-[1.5s] ease-in-out z-10 pointer-events-none" />
+                    <div className="relative flex items-center gap-3 md:gap-4 px-4 md:px-5 py-2.5 md:py-3.5 overflow-hidden transition-all duration-300 transform skew-x-[-12deg] bg-gradient-to-r from-[#2a0a0a]/95 to-[#070b14]/95 border-y border-white/10 group-hover:from-crusader-crimson/80 group-hover:to-[#2a0a0a]/95 group-hover:border-y-crusader-gold/50 shadow-2xl backdrop-blur-md">
+
+                      {/* Animated Metallic Shine */}
+                      <div className="absolute top-0 right-0 w-48 h-full bg-gradient-to-l from-white/[0.1] via-white/[0.02] to-transparent transform translate-x-[200%] group-hover:translate-x-[-150%] transition-transform duration-[2.5s] ease-in-out z-10 pointer-events-none" />
 
                       {/* Button Content - Inverse Skew to keep text perfectly upright */}
-                      <div className="relative z-20 flex items-center gap-5 w-full transform skew-x-[12deg]">
-                        {/* Icon Box */}
-                        <div className="w-12 h-12 flex flex-shrink-0 items-center justify-center bg-black/40 border border-white/10 group-hover:border-crusader-gold/40 group-hover:bg-crusader-gold/20 transition-all duration-300 shadow-inner">
-                          <Icon size={24} className="text-white/40 group-hover:text-crusader-gold group-hover:glow-gold transition-colors duration-300" />
+                      <div className="relative z-20 flex items-center gap-3 md:gap-4 w-full transform skew-x-[12deg]">
+                        {/* Icon Box with Crimson Glow */}
+                        <div className="w-8 h-8 md:w-10 md:h-10 flex flex-shrink-0 items-center justify-center bg-black/60 border border-white/10 group-hover:border-crusader-gold/60 group-hover:bg-black transition-all duration-300 shadow-inner group-hover:shadow-[0_0_20px_rgba(201,168,76,0.2)]">
+                          <Icon size={18} className="text-crusader-gold group-hover:text-white group-hover:scale-110 transition-all duration-300" />
                         </div>
 
                         {/* Label */}
-                        <span className="font-cinzel text-lg md:text-xl font-bold tracking-[0.1em] text-white/80 group-hover:text-white group-hover:glow-white transition-all duration-300 uppercase leading-snug">
-                          {item.label}
-                        </span>
+                        <div className="flex flex-col text-left">
+                          <span className="font-cinzel text-sm md:text-base lg:text-lg font-black tracking-[0.1em] md:tracking-[0.15em] text-white/90 group-hover:text-white group-hover:glow-white transition-all duration-300 uppercase leading-none drop-shadow-md whitespace-nowrap">
+                            {item.label}
+                          </span>
+                          <span className="hidden md:inline-block text-[8px] font-inter tracking-[0.2em] text-crusader-gold/60 group-hover:text-crusader-gold font-bold transition-all duration-300 uppercase mt-1.5 opacity-0 group-hover:opacity-100 transform translate-x-[-10px] group-hover:translate-x-0">
+                            Access Module // Secure
+                          </span>
+                        </div>
 
                         {/* Right Arrow chevron */}
-                        <div className="ml-auto flex-shrink-0 text-white/0 group-hover:text-crusader-gold group-hover:translate-x-2 transition-all duration-300">
-                          <ChevronRight size={24} />
+                        <div className="ml-auto flex-shrink-0 text-white/0 group-hover:text-crusader-gold group-hover:translate-x-2 transition-all duration-300 drop-shadow-[0_0_8px_rgba(201,168,76,0.6)]">
+                          <ChevronRight size={20} strokeWidth={3} />
                         </div>
                       </div>
 
                       {/* Small glowing corner accents block */}
-                      <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-crusader-gold/0 group-hover:border-crusader-gold/80 transition-all duration-500 z-10 m-1" />
+                      <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-crusader-gold/0 group-hover:border-crusader-gold/80 transition-all duration-500 z-10 m-0.5" />
                     </div>
                   </Link>
                 </motion.div>
