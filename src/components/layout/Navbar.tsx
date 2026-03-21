@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Sword, Map, Users, Trophy, User, Menu, X, ChevronDown } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import Button from '@/components/ui/Button'
 
 const navLinks = [
   { href: '/lobby',       label: 'Play',        icon: Sword },
@@ -22,92 +23,103 @@ export default function Navbar() {
       initial={{ y: -100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.8, ease: 'easeOut' }}
-      className="fixed top-0 left-0 right-0 z-40 glass-deep border-b border-white/5"
+      className="fixed top-0 left-0 right-0 z-40 diegetic-container diegetic-clip"
     >
+      {/* Scanner HUD Effect */}
+      <div className="scanner-line" />
+      
+      {/* Top accent line */}
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-crusader-gold/50 to-transparent" />
+      
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-20"> {/* Slightly taller */}
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative w-10 h-10 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full bg-crusader-gold/10 group-hover:bg-crusader-gold/20 transition-colors blur-md" />
-              <img src="/CrusadersClub_LOGO.png" alt="Crusaders Club Logo" className="w-10 h-10 object-contain drop-shadow-lg group-hover:scale-110 transition-transform relative z-10" />
+          <Link href="/" className="flex items-center gap-3 group relative">
+            <div className="relative w-14 h-14 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full bg-crusader-gold/20 group-hover:bg-crusader-gold/40 transition-all duration-500 blur-xl scale-125" />
+              <img src="/CrusadersClub_LOGO.png" alt="Crusaders Club Logo" className="w-14 h-14 object-contain drop-shadow-[0_0_10px_rgba(201,168,76,0.5)] group-hover:scale-110 transition-transform relative z-10" />
             </div>
           </Link>
 
           {/* Desktop links */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-4">
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                  'hover:bg-crusader-gold/10 hover:text-crusader-gold',
+                  'nav-item-glow flex items-center gap-2 px-3 py-2 text-sm font-cinzel font-semibold tracking-wider transition-all duration-300',
                   pathname === href
-                    ? 'text-crusader-gold bg-crusader-gold/10'
-                    : 'text-crusader-gold-light/60',
+                    ? 'active text-crusader-gold'
+                    : 'text-crusader-gold-light/40 hover:text-crusader-gold-light',
                 )}
               >
-                <Icon size={15} />
+                <Icon size={16} className={cn(pathname === href ? 'text-crusader-gold' : 'opacity-50')} />
                 {label}
               </Link>
             ))}
           </div>
 
           {/* Auth buttons */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-6">
             <Link
               href="/auth/login"
-              className="text-sm text-crusader-gold/70 hover:text-crusader-gold transition-colors font-medium"
+              className="font-cinzel text-sm text-crusader-gold/50 hover:text-crusader-gold transition-all duration-300 font-bold tracking-widest uppercase"
             >
               Sign In
             </Link>
             <Link
               href="/auth/register"
-              className={cn(
-                'px-4 py-2 rounded-lg text-sm font-cinzel font-semibold tracking-wide uppercase',
-                'bg-crusader-gold text-crusader-void',
-                'hover:bg-crusader-gold-light transition-all duration-200',
-                'shadow-glow-gold',
-              )}
             >
-              Join
+              <Button variant="gold" size="md" className="px-8 font-cinzel font-bold tracking-widest">
+                Join
+              </Button>
             </Link>
           </div>
 
           {/* Mobile menu toggle */}
           <button
-            className="md:hidden p-2 text-crusader-gold"
+            className="md:hidden p-2 text-crusader-gold hover:glow-gold transition-all"
             onClick={() => setMobileOpen((v) => !v)}
           >
-            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+            {mobileOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
       </div>
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-crusader-gold/10 px-4 py-4 flex flex-col gap-2">
+        <motion.div 
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          className="md:hidden border-t border-crusader-gold/20 bg-crusader-void/95 backdrop-blur-xl px-4 py-6 flex flex-col gap-4"
+        >
           {navLinks.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium',
+                'flex items-center gap-4 px-6 py-4 rounded-lg text-lg font-cinzel font-bold tracking-wide transition-all border border-transparent',
                 pathname === href
-                  ? 'bg-crusader-gold/15 text-crusader-gold'
-                  : 'text-crusader-gold-light/60 hover:bg-crusader-navy/50',
+                  ? 'bg-crusader-gold/10 text-crusader-gold border-crusader-gold/20 glow-gold'
+                  : 'text-crusader-gold-light/40 hover:bg-crusader-gold/5 hover:text-crusader-gold-light',
               )}
             >
-              <Icon size={16} />
+              <Icon size={20} />
               {label}
             </Link>
           ))}
-          <div className="divider-gold my-2" />
-          <Link href="/auth/login"    onClick={() => setMobileOpen(false)} className="px-4 py-3 text-sm text-crusader-gold/70">Sign In</Link>
-          <Link href="/auth/register" onClick={() => setMobileOpen(false)} className="px-4 py-3 text-sm font-cinzel text-crusader-gold font-bold tracking-wide uppercase">Join the Club</Link>
-        </div>
+          <div className="h-[1px] bg-gradient-to-r from-transparent via-crusader-gold/30 to-transparent my-2" />
+          <Link href="/auth/login"    onClick={() => setMobileOpen(false)} className="px-6 py-2 text-crusader-gold/50 font-cinzel font-bold tracking-widest uppercase">Sign In</Link>
+          <div className="px-6">
+            <Link href="/auth/register" onClick={() => setMobileOpen(false)}>
+              <Button variant="gold" fullWidth className="py-5 font-cinzel font-black tracking-[0.2em]">
+                JOIN THE CLUB
+              </Button>
+            </Link>
+          </div>
+        </motion.div>
       )}
     </motion.nav>
   )

@@ -1,13 +1,11 @@
 'use client'
 
-import React, { useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import Navbar from '@/components/layout/Navbar'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
-import SplashScreen from '@/components/ui/SplashScreen'
 import ParticleBackground from '@/components/ui/ParticleBackground'
 import { Sword, Map, Users, Zap, Globe, Shield, Trophy, ChevronRight, Star } from 'lucide-react'
 
@@ -48,16 +46,12 @@ const staggerContainer = {
 }
 
 export default function LandingPage() {
-  const [introFinished, setIntroFinished] = useState(false)
-
   return (
     <div className="min-h-screen bg-crusader-void overflow-hidden selection:bg-crusader-gold/30">
-      <SplashScreen onComplete={() => setIntroFinished(true)} />
-
       {/* Main UI only becomes visible/interactive after splash */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
-        animate={{ opacity: introFinished ? 1 : 0 }}
+        animate={{ opacity: 1 }}
         transition={{ duration: 1 }}
         className="relative z-10"
       >
@@ -69,7 +63,7 @@ export default function LandingPage() {
           <div className="absolute inset-0 z-0">
             <ParticleBackground />
             <div className="absolute inset-0 opacity-50 mix-blend-screen mix-blend-mode">
-               <EarthGlobe autoRotate interactive={false} className="w-full h-full" />
+              <EarthGlobe autoRotate interactive={false} className="w-full h-full" />
             </div>
             {/* Cinematic Gradients */}
             <div className="absolute inset-0 bg-gradient-to-r from-crusader-void via-crusader-void/80 to-transparent z-10" />
@@ -77,41 +71,51 @@ export default function LandingPage() {
           </div>
 
           <div className="relative z-20 max-w-7xl mx-auto px-6 sm:px-10">
-            <motion.div 
+            <motion.div
               initial="hidden"
-              animate={introFinished ? "visible" : "hidden"}
+              animate="visible"
               variants={staggerContainer}
               className="max-w-2xl"
             >
-              <motion.div variants={fadeInUp} className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-crusader-gold/30 glass mb-6">
-                <Star size={12} className="text-crusader-gold fill-crusader-gold" />
-                <span className="text-xs font-cinzel tracking-widest text-crusader-gold uppercase">The Modern Strategy Game</span>
-              </motion.div>
 
-              <motion.h1 variants={fadeInUp} className="font-cinzel font-black leading-tight mb-6 drop-shadow-2xl">
-                <span className="block text-5xl sm:text-7xl text-white glow-white">COMMAND</span>
-                <span className="block text-5xl sm:text-7xl text-white glow-white">THE <span className="text-transparent bg-clip-text bg-gradient-to-r from-crusader-gold to-crusader-gold-light shimmer">WORLD</span></span>
-              </motion.h1>
+              <div className="relative z-10 py-10">
+                <motion.div variants={fadeInUp} className="relative mb-12">
+                  {/* Epic Logo Container */}
+                  <div className="relative flex items-center justify-center">
+                    {/* The Logo */}
+                    <img
+                      src="/CrusadersClub_LOGO.png"
+                      alt="Crusaders Club"
+                      className="relative z-10 w-full max-w-[550px] h-auto drop-shadow-[0_0_40px_rgba(201,168,76,0.15)] group-hover:scale-[1.02] transition-transform duration-700"
+                    />
+                  </div>
+                </motion.div>
 
-              <motion.p variants={fadeInUp} className="text-lg sm:text-xl text-crusader-gold-light/70 mb-8 leading-relaxed max-w-xl">
-                Lead armies. Conquer continents. Build legendary maps and
-                battle players across the globe in a breathtaking AAA strategy experience.
-              </motion.p>
+                <motion.div variants={fadeInUp} className="mb-12 text-center md:text-left">
+                  <h1 className="font-cinzel text-3xl sm:text-5xl font-black tracking-[0.3em] text-crusader-gold-light uppercase italic cursor-default">
+                    Command the World
+                  </h1>
+                </motion.div>
 
-              <motion.div variants={fadeInUp} className="flex flex-wrap gap-4">
-                <Link href="/lobby">
-                  <Button size="xl" variant="gold" icon={<Sword size={20} />}>Start Playing</Button>
-                </Link>
-                <Link href="/map-creator">
-                  <Button size="xl" variant="outline" icon={<Map size={20} />}>Create a Map</Button>
-                </Link>
-              </motion.div>
+                <motion.div variants={fadeInUp} className="flex flex-wrap gap-6 relative z-30">
+                  <Link href="/lobby">
+                    <Button size="xl" variant="gold" icon={<Sword size={24} />} className="shadow-[0_0_40px_rgba(201,168,76,0.3)] px-12 border-2">
+                      Start Playing
+                    </Button>
+                  </Link>
+                  <Link href="/map-creator">
+                    <Button size="xl" variant="outline" icon={<Map size={24} />} className="px-12 border-2 hover:bg-crusader-gold/10">
+                      Map Creator
+                    </Button>
+                  </Link>
+                </motion.div>
+              </div>
             </motion.div>
           </div>
 
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: introFinished ? 1 : 0 }}
+            animate={{ opacity: 1 }}
             transition={{ delay: 2, duration: 1 }}
             className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-float z-20"
           >
@@ -123,7 +127,7 @@ export default function LandingPage() {
         {/* ── Stats Bar ─────────────────────────────────────────────────────── */}
         <section className="relative z-20 py-10 border-y border-white/5 glass-dark backdrop-blur-3xl">
           <div className="max-w-7xl mx-auto px-6">
-            <motion.div 
+            <motion.div
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true, margin: '-50px' }}
@@ -144,7 +148,7 @@ export default function LandingPage() {
         <section className="py-32 px-6 relative z-10">
           <div className="absolute inset-0 bg-radial-glow opacity-20 pointer-events-none" />
           <div className="max-w-7xl mx-auto relative z-10">
-            <motion.div 
+            <motion.div
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true }}
@@ -157,7 +161,7 @@ export default function LandingPage() {
               </p>
             </motion.div>
 
-            <motion.div 
+            <motion.div
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true }}
@@ -183,7 +187,7 @@ export default function LandingPage() {
         {/* ── CTA ───────────────────────────────────────────────────────────── */}
         <section className="py-32 px-6 relative z-10 overflow-hidden border-t border-white/5 glass-dark">
           <div className="absolute inset-0 bg-radial-gold opacity-40 pointer-events-none" />
-          <motion.div 
+          <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
