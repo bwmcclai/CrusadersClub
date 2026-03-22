@@ -17,29 +17,29 @@ interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'ref'> {
 
 const variants: Record<Variant, string> = {
   gold: cn(
-    'bg-gradient-to-b from-crusader-gold to-crusader-gold-dim',
-    'text-crusader-void font-semibold',
-    'border border-crusader-gold',
-    'shadow-glow-gold hover:shadow-[0_0_30px_#C9A84C88,0_0_60px_#C9A84C44]',
-    'hover:from-crusader-gold-light hover:to-crusader-gold',
+    'bg-gradient-to-b from-crusader-wood to-crusader-wood-dark',
+    'text-crusader-parchment font-bold',
+    'border border-crusader-gold/60',
+    'shadow-[0_4px_10px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(201,168,76,0.3)] hover:shadow-[0_6px_15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(201,168,76,0.5)]',
+    'hover:from-[#3c281e] hover:to-[#281c14] hover:text-white',
   ),
   outline: cn(
-    'bg-transparent text-crusader-gold',
+    'bg-crusader-void/80 text-crusader-gold',
     'border border-crusader-gold/40 hover:border-crusader-gold',
-    'hover:bg-crusader-gold/10 hover:shadow-glow-gold',
+    'hover:bg-crusader-gold/10 shadow-[inset_0_0_10px_rgba(0,0,0,0.8)]',
   ),
   ghost: cn(
-    'bg-transparent text-crusader-gold-light/70',
+    'bg-transparent text-crusader-parchment/70',
     'border border-transparent hover:border-crusader-gold/20',
-    'hover:bg-crusader-navy/50 hover:text-crusader-gold',
+    'hover:bg-crusader-wood/50 hover:text-crusader-gold',
   ),
   danger: cn(
-    'bg-crusader-crimson text-white border border-crusader-crimson/60',
-    'hover:bg-crusader-crimson-bright hover:shadow-glow-crimson',
+    'bg-gradient-to-b from-crusader-crimson-bright to-crusader-crimson text-white border border-crusader-gold/40',
+    'hover:brightness-110 shadow-[0_4px_10px_rgba(0,0,0,0.6)]',
   ),
   ice: cn(
-    'bg-transparent text-crusader-glow border border-crusader-glow/40',
-    'hover:border-crusader-glow hover:bg-crusader-glow/10 hover:shadow-glow-blue',
+    'bg-transparent text-crusader-parchment border border-crusader-parchment/40',
+    'hover:border-crusader-parchment hover:bg-crusader-parchment/10',
   ),
 }
 

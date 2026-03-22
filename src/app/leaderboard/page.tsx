@@ -10,6 +10,7 @@ import {
   Minus, Search, Star, Shield, Users, Zap,
 } from 'lucide-react'
 import { getTierForLevel, PRESET_AVATARS } from '@/lib/xp'
+import FlagAvatar from '@/components/ui/FlagAvatar'
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -94,11 +95,12 @@ function PodiumPlayer({
       {/* Avatar */}
       <div className={`relative ${position !== 1 ? 'mt-8' : ''}`}>
         <div className={`${m.glow} rounded-full`}>
-          <img
-            src={player.avatar}
-            alt={player.username}
+          <FlagAvatar
+            flagId={player.avatar}
+            size={position === 1 ? 80 : 64}
+            fallbackLetter={player.username[0]}
+            className={`${sizes[position]} border-[3px]`}
             style={{ borderColor: tier.color }}
-            className={`${sizes[position]} rounded-full border-[3px] object-cover bg-crusader-navy`}
           />
         </div>
         {/* Rank badge */}
@@ -365,11 +367,12 @@ export default function LeaderboardPage() {
                         {/* Player info */}
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="relative flex-shrink-0">
-                            <img
-                              src={player.avatar}
-                              alt={player.username}
+                            <FlagAvatar
+                              flagId={player.avatar}
+                              size={36}
+                              fallbackLetter={player.username[0]}
+                              className="w-9 h-9 border-2"
                               style={{ borderColor: tier.color }}
-                              className="w-9 h-9 rounded-full border-2 object-cover bg-crusader-navy"
                             />
                           </div>
                           <div className="min-w-0">

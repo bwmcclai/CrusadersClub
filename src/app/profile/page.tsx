@@ -11,6 +11,7 @@ import Navbar from '@/components/layout/Navbar'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import FlagAvatar from '@/components/ui/FlagAvatar'
 import { useAppStore } from '@/lib/store'
 import { getSupabaseClient } from '@/lib/supabase'
 import {
@@ -69,17 +70,14 @@ function ProfileAvatar({ size = 96, editing = false, onUploadClick }: {
           borderRadius: '50%',
         }}
       >
-        <div className="w-full h-full rounded-full bg-crusader-dark overflow-hidden">
-          {player.avatar_url ? (
-            <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
-          ) : (
-            <div
-              className="w-full h-full flex items-center justify-center font-cinzel font-bold"
-              style={{ backgroundColor: player.default_color + '22', fontSize: size * 0.36, color: tier.color }}
-            >
-              {player.username[0].toUpperCase()}
-            </div>
-          )}
+        <div className="w-full h-full rounded-full bg-crusader-dark overflow-hidden flex items-center justify-center">
+          <FlagAvatar 
+            flagId={player?.avatar_url ?? null} 
+            size={size - 6} // Adjusted for tier ring padding
+            fallbackLetter={player.username[0]}
+            fallbackColor={player.default_color}
+            className="border-none"
+          />
         </div>
       </div>
 
@@ -511,26 +509,38 @@ function CustomizeTab({ onSaved }: { onSaved: () => void }) {
         </h2>
         <p className="text-xs text-crusader-gold/40">Choose a preset or upload your own (unlocked at Level 5)</p>
 
-        {/* Preset grid */}
-        <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
-          {PRESET_AVATARS.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => setAvatar(preset.url)}
-              className={cn(
-                'rounded-xl overflow-hidden border-2 transition-all duration-200',
-                selectedAvatar === preset.url
-                  ? 'border-crusader-gold shadow-glow-gold scale-105'
-                  : 'border-crusader-gold/20 hover:border-crusader-gold/60',
-              )}
-            >
-              <img src={preset.url} alt={preset.id} className="w-full aspect-square object-cover bg-crusader-dark" />
-            </button>
-          ))}
+        {/* Flags grid */}
+        <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+            {/* Generate the 6x4 flags from Flags.png */}
+            {Array.from({ length: 24 }).map((_, i) => {
+              const col = i % 6
+              const row = Math.floor(i / 6)
+              const flagId = `flag:${col},${row}`
+              const isSelected = selectedAvatar === flagId
+
+              return (
+                <button
+                  key={flagId}
+                  onClick={() => setAvatar(flagId)}
+                  className={cn(
+                    'rounded-lg overflow-hidden border-2 transition-all duration-200 aspect-square',
+                    isSelected
+                      ? 'border-crusader-gold shadow-glow-gold scale-105'
+                      : 'border-crusader-gold/20 hover:border-crusader-gold/60 hover:scale-105',
+                  )}
+                >
+                  <div className="w-full h-full pointer-events-none scale-150 origin-center">
+                    <FlagAvatar flagId={flagId} size={100} className="w-full h-full border-none rounded-none" />
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
-        {/* Upload */}
-        <div className="relative">
+        {/* Upload Custom (still available) */}
+        <div className="relative mt-4">
           <input
             ref={fileRef}
             type="file"
@@ -552,23 +562,29 @@ function CustomizeTab({ onSaved }: { onSaved: () => void }) {
               uploading ? (
                 <><div className="w-4 h-4 border-2 border-crusader-gold border-t-transparent rounded-full animate-spin" /> Uploading...</>
               ) : (
-                <><Upload size={16} /> Upload Custom Avatar</>
+                <><Upload size={16} /> Upload Custom Portrait</>
               )
             ) : (
-              <><Lock size={14} /> Custom Upload unlocks at Level 5 (you are Lv {level})</>
+              <><Lock size={14} /> Custom Upload unlocks at Level 5</>
             )}
           </button>
         </div>
 
         {/* Current avatar preview */}
         {selectedAvatar && (
-          <div className="flex items-center gap-3 p-3 bg-crusader-dark/50 rounded-xl border border-crusader-gold/10">
-            <img src={selectedAvatar} alt="selected" className="w-12 h-12 rounded-lg object-cover" />
+          <div className="flex items-center gap-4 p-4 mt-4 bg-crusader-dark/50 rounded-xl border border-crusader-gold/10">
+            <FlagAvatar 
+              flagId={selectedAvatar} 
+              size={56} 
+              fallbackLetter={player.username[0]} 
+              fallbackColor={player.default_color} 
+            />
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-crusader-gold font-cinzel font-semibold">Selected Avatar</p>
+              <p className="text-sm text-crusader-gold font-cinzel font-semibold">Selected Banner</p>
+              <p className="text-xs text-crusader-gold/40 truncate">{selectedAvatar.startsWith('flag:') ? 'Medieval Flag' : 'Custom Upload'}</p>
             </div>
-            <button onClick={() => setAvatar('')} className="text-crusader-gold/40 hover:text-crusader-gold transition-colors">
-              <X size={14} />
+            <button onClick={() => setAvatar('')} className="p-2 text-crusader-gold/40 hover:text-crusader-gold hover:bg-crusader-gold/10 rounded-lg transition-colors">
+              <X size={18} />
             </button>
           </div>
         )}

@@ -132,6 +132,103 @@ export function generateTerritories(
   return { territories, bonusGroups }
 }
 
+// ─── Zone Generation from GeoJSON Features (continent / globe modes) ──────────
+
+export interface BonusGroupDef {
+  id:         string
+  name:       string
+  featureIds: number[]   // ISO numeric codes of features in this group
+  bonus:      number
+}
+
+/**
+ * Generates Territory[] + BonusGroup[] from an array of GeoJSON country features.
+ * Each feature becomes one territory (largest polygon ring is used for display).
+ * Adjacency is derived from Delaunay triangulation of seed centroids.
+ */
+export function generateZonesFromFeatures(
+  features: GeoJSON.Feature[],
+  bonusDefs: BonusGroupDef[],
+  width  = 1200,
+  height =  600,
+): GeneratedMap {
+  if (features.length === 0) return { territories: [], bonusGroups: [] }
+
+  // Project each feature to 2D
+  const entries: { id: string; name: string; polygon: [number, number][]; seed: [number, number] }[] = []
+
+  for (const feat of features) {
+    const geo = feat.geometry
+    if (!geo) continue
+
+    // Pick the largest polygon ring
+    let rings: number[][][] = []
+    if (geo.type === 'Polygon') {
+      rings = geo.coordinates as number[][][]
+    } else if (geo.type === 'MultiPolygon') {
+      const all = (geo.coordinates as number[][][][]).flat()
+      all.sort((a, b) => b.length - a.length)
+      rings = all
+    }
+
+    if (!rings.length) continue
+
+    const projected: [number, number][] = rings[0].map(
+      ([lon, lat]) => mercatorProject(lon, lat, width, height),
+    )
+
+    // Seed = bounding box centroid of the projected polygon
+    const xs = projected.map(([x]) => x)
+    const ys = projected.map(([, y]) => y)
+    const seed: [number, number] = [
+      (Math.min(...xs) + Math.max(...xs)) / 2,
+      (Math.min(...ys) + Math.max(...ys)) / 2,
+    ]
+
+    const numId = typeof feat.id === 'string' ? parseInt(feat.id) : (feat.id as number ?? 0)
+    entries.push({ id: `z-${numId}`, name: `z-${numId}`, polygon: projected, seed })
+  }
+
+  if (entries.length === 0) return { territories: [], bonusGroups: [] }
+
+  // Delaunay on seeds for adjacency
+  const seeds  = entries.map((e) => e.seed)
+  const delaunay = Delaunay.from(seeds)
+  const adjacency: Set<number>[] = seeds.map(() => new Set())
+  seeds.forEach((_, i) => {
+    for (const j of Array.from(delaunay.neighbors(i))) {
+      adjacency[i].add(j)
+      adjacency[j].add(i)
+    }
+  })
+
+  const territories: Territory[] = entries.map((e, i) => ({
+    id:          e.id,
+    name:        e.name,
+    polygon:     e.polygon,
+    seed:        e.seed,
+    adjacent_ids: Array.from(adjacency[i]).map((j) => entries[j].id),
+  }))
+
+  // Build bonus groups: map feature ISO id → territory id
+  const isoToTerritoryId = new Map<number, string>()
+  features.forEach((feat, i) => {
+    const numId = typeof feat.id === 'string' ? parseInt(feat.id) : (feat.id as number ?? 0)
+    if (entries[i]) isoToTerritoryId.set(numId, entries[i].id)
+  })
+
+  const bonusGroups: BonusGroup[] = bonusDefs.map((def) => ({
+    id:            def.id,
+    name:          def.name,
+    territory_ids: def.featureIds
+      .map((iso) => isoToTerritoryId.get(iso))
+      .filter(Boolean) as string[],
+    bonus_armies:  def.bonus,
+  }))
+
+  return { territories, bonusGroups }
+}
+
 // ─── Misc ─────────────────────────────────────────────────────────────────────
 
 export function formatMode(mode: string): string {

@@ -9,6 +9,7 @@ import Button from '@/components/ui/Button'
 import { useAppStore } from '@/lib/store'
 import { getSupabaseClient } from '@/lib/supabase'
 import { getTierForLevel } from '@/lib/xp'
+import FlagAvatar from '@/components/ui/FlagAvatar'
 
 const navLinks = [
   { href: '/lobby',       label: 'Play',        icon: Sword  },
@@ -24,26 +25,14 @@ function NavAvatar({ size = 36 }: { size?: number }) {
 
   const tier = getTierForLevel(player.level)
 
-  if (player.avatar_url) {
-    return (
-      <img
-        src={player.avatar_url}
-        alt={player.username}
-        width={size}
-        height={size}
-        style={{ width: size, height: size, borderColor: tier.color }}
-        className="rounded-full border-2 object-cover"
-      />
-    )
-  }
-
   return (
-    <div
-      style={{ width: size, height: size, borderColor: tier.color, backgroundColor: player.default_color + '33' }}
-      className="rounded-full border-2 flex items-center justify-center font-cinzel font-bold text-sm"
-    >
-      <span style={{ color: tier.color }}>{player.username[0].toUpperCase()}</span>
-    </div>
+    <FlagAvatar 
+      flagId={player.avatar_url ?? null} 
+      size={size} 
+      fallbackLetter={player.username[0]} 
+      fallbackColor={player.default_color} 
+      style={{ borderColor: tier.color }}
+    />
   )
 }
 
@@ -68,10 +57,10 @@ export default function Navbar() {
       initial={{ y: -100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.8, ease: 'easeOut' }}
-      className="fixed top-0 left-0 right-0 z-40 diegetic-container diegetic-clip"
+      className="fixed top-0 left-0 right-0 z-40 diegetic-container"
     >
-      <div className="scanner-line" />
-      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-crusader-gold/50 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-crusader-gold/80 to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-crusader-gold/30 to-transparent" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-20">

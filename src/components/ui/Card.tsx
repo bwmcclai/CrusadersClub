@@ -25,14 +25,18 @@ export default function Card({ children, className, glow = 'gold', hover = false
       whileHover={hover ? { y: -5, scale: 1.02 } : undefined}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       className={cn(
-        'glass rounded-2xl transition-shadow duration-300',
+        'glass rounded-sm relative overflow-hidden transition-shadow duration-300',
         glowMap[glow],
         hover && 'cursor-pointer',
         onClick && 'cursor-pointer',
         className,
       )}
     >
-      {children}
+      <div className="absolute top-1 left-1 w-2 h-2 border-t border-l border-crusader-gold/50 pointer-events-none" />
+      <div className="absolute top-1 right-1 w-2 h-2 border-t border-r border-crusader-gold/50 pointer-events-none" />
+      <div className="absolute bottom-1 left-1 w-2 h-2 border-b border-l border-crusader-gold/50 pointer-events-none" />
+      <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-crusader-gold/50 pointer-events-none" />
+      <div className="relative z-10">{children}</div>
     </motion.div>
   )
 }

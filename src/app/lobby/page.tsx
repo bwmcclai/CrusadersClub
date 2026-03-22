@@ -1,13 +1,15 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Navbar from '@/components/layout/Navbar'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
-import { Sword, Map, Users, Zap, Shield, Clock, Search, Plus, Filter, Bot, Globe } from 'lucide-react'
+import { Sword, Map, Users, Zap, Shield, Clock, Search, Plus, Filter, Bot, Globe, PenTool } from 'lucide-react'
 import { formatMode } from '@/lib/utils'
+import { getSupabaseClient } from '@/lib/supabase'
 import type { LobbyGame, GameMode } from '@/types'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
@@ -103,15 +105,70 @@ interface CreateGameForm {
   aiCount:    number
 }
 
-function CreateGameModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface BattleMapPreview {
+  id: string; name: string; territories: number; rating: number; plays: number
+}
+
+function CreateGameModal({
+  open, onClose, initialMapId, initialMode, initialMaxPlayers, initialAiCount,
+}: {
+  open: boolean
+  onClose: () => void
+  initialMapId?: string
+  initialMode?: GameMode
+  initialMaxPlayers?: number
+  initialAiCount?: number
+}) {
+  const router = useRouter()
   const [form, setForm] = useState<CreateGameForm>({
-    name: '', mode: 'lightning', maxPlayers: 4, mapId: '', aiCount: 0,
+    name: '', mode: initialMode ?? 'lightning',
+    maxPlayers: initialMaxPlayers ?? 4,
+    mapId: initialMapId ?? '',
+    aiCount: initialAiCount ?? 0,
   })
+  const [maps, setMaps] = useState<BattleMapPreview[]>(MOCK_FEATURED_MAPS)
   const [loading, setLoading] = useState(false)
+
+  // Sync initial props when modal opens with pre-selected map
+  useEffect(() => {
+    if (open && initialMapId) {
+      setForm((f) => ({
+        ...f,
+        mapId:      initialMapId ?? f.mapId,
+        mode:       initialMode ?? f.mode,
+        maxPlayers: initialMaxPlayers ?? f.maxPlayers,
+        aiCount:    initialAiCount ?? f.aiCount,
+      }))
+    }
+  }, [open, initialMapId, initialMode, initialMaxPlayers, initialAiCount])
+
+  // Fetch real maps from Supabase
+  useEffect(() => {
+    async function fetchMaps() {
+      try {
+        const { data } = await getSupabaseClient()
+          .from('battle_maps')
+          .select('id, name, territories, play_count')
+          .eq('is_public', true)
+          .order('play_count', { ascending: false })
+          .limit(8)
+        if (data && data.length > 0) {
+          setMaps(data.map((m: any) => ({
+            id:          m.id,
+            name:        m.name,
+            territories: Array.isArray(m.territories) ? m.territories.length : 0,
+            rating:      0,
+            plays:       m.play_count ?? 0,
+          })))
+        }
+      } catch {/* keep mock data */}
+    }
+    fetchMaps()
+  }, [])
 
   async function handleCreate() {
     setLoading(true)
-    // TODO: Supabase create game
+    // TODO: Supabase create game + redirect to game room
     await new Promise((r) => setTimeout(r, 1000))
     setLoading(false)
     onClose()
@@ -154,9 +211,18 @@ function CreateGameModal({ open, onClose }: { open: boolean; onClose: () => void
 
         {/* Map select */}
         <div>
-          <label className="text-sm font-cinzel tracking-wide text-crusader-gold/80 block mb-2">Select Map</label>
-          <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto scrollbar-none">
-            {MOCK_FEATURED_MAPS.map((map) => (
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-cinzel tracking-wide text-crusader-gold/80">Select Map</label>
+            <Link
+              href="/map-creator"
+              className="flex items-center gap-1 text-xs text-crusader-gold/50 hover:text-crusader-gold transition-colors"
+              onClick={onClose}
+            >
+              <PenTool size={11} /> Create New Map
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto scrollbar-none">
+            {maps.map((map) => (
               <button
                 key={map.id}
                 onClick={() => setForm((f) => ({ ...f, mapId: map.id }))}
@@ -171,6 +237,14 @@ function CreateGameModal({ open, onClose }: { open: boolean; onClose: () => void
               </button>
             ))}
           </div>
+          {maps.length === 0 && (
+            <div className="text-center py-6 border border-dashed border-crusader-gold/20 rounded-xl">
+              <p className="text-xs text-crusader-gold/40 mb-3">No maps yet. Create the first one!</p>
+              <Link href="/map-creator" onClick={onClose}>
+                <Button size="sm" variant="outline" icon={<PenTool size={12} />}>Open Map Creator</Button>
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Players */}
@@ -180,8 +254,11 @@ function CreateGameModal({ open, onClose }: { open: boolean; onClose: () => void
               Max Players: <span className="text-crusader-gold">{form.maxPlayers}</span>
             </label>
             <input
-              type="range" min={2} max={6} value={form.maxPlayers}
-              onChange={(e) => setForm((f) => ({ ...f, maxPlayers: Number(e.target.value) }))}
+              type="range" min={2} max={8} value={form.maxPlayers}
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                setForm((f) => ({ ...f, maxPlayers: v, aiCount: Math.min(f.aiCount, v - 1) }))
+              }}
               className="w-full accent-crusader-gold"
             />
           </div>
@@ -190,7 +267,7 @@ function CreateGameModal({ open, onClose }: { open: boolean; onClose: () => void
               AI Bots: <span className="text-crusader-gold">{form.aiCount}</span>
             </label>
             <input
-              type="range" min={0} max={Math.min(form.maxPlayers - 1, 5)} value={form.aiCount}
+              type="range" min={0} max={form.maxPlayers - 1} value={form.aiCount}
               onChange={(e) => setForm((f) => ({ ...f, aiCount: Number(e.target.value) }))}
               className="w-full accent-crusader-gold"
             />
@@ -217,9 +294,20 @@ function CreateGameModal({ open, onClose }: { open: boolean; onClose: () => void
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function LobbyPage() {
-  const [search, setSearch]       = useState('')
-  const [modeFilter, setModeFilter] = useState<GameMode | 'all'>('all')
-  const [showCreate, setShowCreate] = useState(false)
+  const searchParams   = useSearchParams()
+  const [search, setSearch]           = useState('')
+  const [modeFilter, setModeFilter]   = useState<GameMode | 'all'>('all')
+  const [showCreate, setShowCreate]   = useState(false)
+
+  // Pre-populate from Map Creator redirect (?newMapId=xxx&mode=...&maxPlayers=...&aiCount=...)
+  const newMapId      = searchParams.get('newMapId')    ?? undefined
+  const presetMode    = (searchParams.get('mode')       ?? undefined) as GameMode | undefined
+  const presetPlayers = searchParams.get('maxPlayers')  ? Number(searchParams.get('maxPlayers'))  : undefined
+  const presetAi      = searchParams.get('aiCount')     ? Number(searchParams.get('aiCount'))     : undefined
+
+  useEffect(() => {
+    if (newMapId) setShowCreate(true)
+  }, [newMapId])
 
   const filtered = MOCK_GAMES.filter((g) => {
     const matchSearch = g.name.toLowerCase().includes(search.toLowerCase()) || g.map_name.toLowerCase().includes(search.toLowerCase())
@@ -358,19 +446,28 @@ export default function LobbyPage() {
             <Card className="p-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-24 h-24 bg-crusader-gold/5 rounded-bl-full" />
               <Map size={24} className="text-crusader-gold mb-3" />
-              <h3 className="font-cinzel text-base font-semibold text-crusader-gold mb-2">Create a Map</h3>
+              <h3 className="font-cinzel text-base font-semibold text-crusader-gold mb-2">Create Your Map</h3>
               <p className="text-sm text-crusader-gold/50 mb-4 leading-relaxed">
-                Build your own battle map from any region on Earth.
+                Design a custom battlefield — from a single country to the entire globe.
               </p>
               <Link href="/map-creator">
-                <Button fullWidth variant="outline" size="sm">Open Map Creator</Button>
+                <Button fullWidth variant="gold" size="sm" icon={<PenTool size={13} />}>
+                  Open Map Creator
+                </Button>
               </Link>
             </Card>
           </div>
         </div>
       </main>
 
-      <CreateGameModal open={showCreate} onClose={() => setShowCreate(false)} />
+      <CreateGameModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        initialMapId={newMapId}
+        initialMode={presetMode}
+        initialMaxPlayers={presetPlayers}
+        initialAiCount={presetAi}
+      />
     </div>
   )
 }

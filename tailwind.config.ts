@@ -10,17 +10,21 @@ const config: Config = {
     extend: {
       colors: {
         crusader: {
-          void: '#04060D',
-          dark: '#070B14',
-          navy: '#0D1B2A',
-          steel: '#1C3A5E',
+          void: '#0A0A0A',
+          dark: '#141414',
+          navy: '#121F33',
+          steel: '#243A51',
           gold: '#C9A84C',
           'gold-light': '#E8D090',
           'gold-dim': '#8A6E2F',
-          crimson: '#8B1A1A',
-          'crimson-bright': '#C0392B',
+          crimson: '#6B1212',
+          'crimson-bright': '#991F1F',
+          parchment: '#E8D5A3',
+          'parchment-dark': '#B8A47A',
+          wood: '#2b1d16',
+          'wood-dark': '#1e140f',
           ice: '#A8D8EA',
-          glow: '#4AAFD4',
+          stone: '#2A2E33',
         },
       },
       fontFamily: {
@@ -29,20 +33,19 @@ const config: Config = {
       },
       backgroundImage: {
         'radial-gold': 'radial-gradient(ellipse at center, #C9A84C22 0%, transparent 70%)',
-        'radial-glow': 'radial-gradient(ellipse at center, #4AAFD422 0%, transparent 70%)',
-
+        'radial-crimson': 'radial-gradient(ellipse at center, #6B121244 0%, transparent 70%)',
       },
       boxShadow: {
-        'glow-gold': '0 0 20px #C9A84C66, 0 0 40px #C9A84C33',
-        'glow-blue': '0 0 20px #4AAFD466, 0 0 40px #4AAFD433',
-        'glow-crimson': '0 0 20px #8B1A1A66, 0 0 40px #8B1A1A33',
-        'card': '0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
+        'glow-gold': '0 0 15px #C9A84C44, 0 0 30px #C9A84C22',
+        'glow-crimson': '0 0 15px #6B121244, 0 0 30px #6B121222',
+        'card': '0 8px 32px rgba(0,0,0,0.8), inset 0 1px 0 rgba(232, 213, 163, 0.15)',
+        'medieval-inset': 'inset 0 0 20px rgba(0,0,0,0.8)',
       },
       animation: {
         'spin-slow': 'spin 20s linear infinite',
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'float': 'float 6s ease-in-out infinite',
-        'glow-pulse': 'glowPulse 3s ease-in-out infinite',
+        'flicker': 'flicker 3s ease-in-out infinite alternate',
         'slide-up': 'slideUp 0.5s ease-out',
         'fade-in': 'fadeIn 0.6s ease-out',
       },
@@ -51,9 +54,10 @@ const config: Config = {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-10px)' },
         },
-        glowPulse: {
-          '0%, 100%': { opacity: '0.6' },
-          '50%': { opacity: '1' },
+        flicker: {
+          '0%, 100%': { opacity: '0.8', transform: 'scale(1)' },
+          '50%': { opacity: '1', transform: 'scale(1.02)' },
+          '25%, 75%': { opacity: '0.9' },
         },
         slideUp: {
           from: { transform: 'translateY(20px)', opacity: '0' },

@@ -6,8 +6,8 @@ import type { Territory, TerritoryState, GamePlayer } from '@/types'
 // ─── Colour helpers ──────────────────────────────────────────────────────────
 
 const TERRITORY_PALETTE = [
-  '#1E3A5F', '#1A3A2A', '#3A1A1A', '#2D1A3A',
-  '#1A2E3A', '#3A2D1A', '#1A3A34', '#3A1A2D',
+  '#8B3A3A', '#3A5A4A', '#8A6E2F', '#3A4A6A',
+  '#6B2A2A', '#634b22', '#2F4F4F', '#4A3A4A',
 ]
 
 function getTerritoryFill(
@@ -48,9 +48,9 @@ function TerritoryPath({
     .join(' ') + ' Z'
 
   const strokeColor = isSelected   ? '#C9A84C'
-    : isAttackable                  ? '#E74C3C'
+    : isAttackable                  ? '#C0392B'
     : isHovered                     ? '#E8D090'
-    : '#4AAFD444'
+    : 'rgba(43, 29, 22, 0.5)'
   const strokeW = isSelected || isAttackable ? 2 : isHovered ? 1.5 : 0.8
 
   const [cx, cy] = territory.seed

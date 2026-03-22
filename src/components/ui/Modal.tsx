@@ -38,27 +38,34 @@ export default function Modal({ open, onClose, title, children, size = 'md', cla
       {/* Panel */}
       <div
         className={cn(
-          'relative w-full glass rounded-2xl border border-crusader-gold/20',
-          'shadow-[0_20px_60px_rgba(0,0,0,0.8)]',
-          'animate-slide-up',
+          'relative w-full glass rounded-sm border-[3px] border-crusader-wood-dark',
+          'shadow-[0_20px_60px_rgba(0,0,0,0.9)]',
+          'animate-slide-up overflow-hidden',
           sizeMap[size],
           className,
         )}
       >
+        {/* Inner Gold border and Accents */}
+        <div className="absolute inset-1 border border-crusader-gold/40 z-30 pointer-events-none" />
+        <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-crusader-gold/60 pointer-events-none z-30" />
+        <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-crusader-gold/60 pointer-events-none z-30" />
+        <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-crusader-gold/60 pointer-events-none z-30" />
+        <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-crusader-gold/60 pointer-events-none z-30" />
+
         {title && (
-          <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-crusader-gold/10">
-            <h2 className="font-cinzel text-lg font-semibold text-crusader-gold tracking-widest uppercase">
+          <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-crusader-gold/30 bg-black/40 relative z-20">
+            <h2 className="font-cinzel text-xl font-bold text-crusader-parchment tracking-widest uppercase drop-shadow-md">
               {title}
             </h2>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-crusader-gold/40 hover:text-crusader-gold hover:bg-crusader-gold/10 transition-colors"
+              className="p-1.5 rounded-sm text-crusader-gold/60 border border-transparent hover:border-crusader-gold/40 hover:text-crusader-gold hover:bg-crusader-gold/10 transition-colors"
             >
-              <X size={18} />
+              <X size={20} />
             </button>
           </div>
         )}
-        <div className="p-6">{children}</div>
+        <div className="p-6 relative z-20">{children}</div>
       </div>
     </div>
   )
