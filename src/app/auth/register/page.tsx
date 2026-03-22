@@ -52,7 +52,7 @@ export default function RegisterPage() {
       password: form.password,
       options: {
         data: { username: form.username.trim() },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin}/auth/callback`,
       },
     })
 
@@ -70,10 +70,11 @@ export default function RegisterPage() {
 
   async function handleGoogle() {
     const supabase = getSupabaseClient()
+    const base = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${base}/auth/callback`,
       },
     })
   }
