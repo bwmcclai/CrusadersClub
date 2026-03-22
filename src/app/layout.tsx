@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import AuthProvider from '@/components/AuthProvider'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const metadata: Metadata = {
   title:       'Crusaders Club — Command the World',
@@ -13,7 +14,18 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const supabase = createServerSupabaseClient()
+  
+  // Pre-fetch auth user and player profile on the server for immediate hydration.
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  let initialPlayer = null
+  if (user) {
+    const { data } = await supabase.from('players').select('*').eq('id', user.id).maybeSingle()
+    initialPlayer = data
+  }
+
   return (
     <html lang="en" className="dark">
       <head>
@@ -21,8 +33,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect"                  href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="bg-crusader-void text-crusader-gold-light antialiased min-h-screen">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider initialUser={user} initialPlayer={initialPlayer}>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   )
 }
+

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { getSupabaseClient } from '@/lib/supabase'
@@ -126,16 +126,28 @@ async function ensurePlayer(user: User): Promise<Player | null> {
   return created as Player
 }
 
-
+interface AuthProviderProps {
+  children:      React.ReactNode
+  initialUser?:   User | null
+  initialPlayer?: Player | null
+}
 
 /**
  * Initializes auth state on mount and subscribes to auth changes.
  * Populates Zustand store with the current player profile.
- * Automatically creates a players row for first-time OAuth users.
  */
-export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { setPlayer } = useAppStore()
-  const router        = useRouter()
+export default function AuthProvider({ children, initialUser, initialPlayer }: AuthProviderProps) {
+  const setPlayer = useAppStore((s) => s.setPlayer)
+  const router    = useRouter()
+  const initialized = useRef(false)
+
+  // Immediate hydration if props are provided by the server
+  if (!initialized.current) {
+    if (initialPlayer) {
+      setPlayer(initialPlayer)
+      initialized.current = true
+    }
+  }
 
   useEffect(() => {
     const supabase = getSupabaseClient()
@@ -159,19 +171,23 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       }
     }
 
-    // Load current session on mount
-    console.log('[AuthProvider] mounting, checking initial session...')
-    supabase.auth.getUser().then(({ data: { user }, error }) => {
-      console.log('[AuthProvider] initial getUser result:', { 
-        hasUser: !!user, 
-        userId: user?.id,
-        error: error?.message 
+    // Skip initial fetch if we already have it from the server
+    if (!initialized.current) {
+      console.log('[AuthProvider] mounting, checking initial session...')
+      supabase.auth.getUser().then(({ data: { user }, error }) => {
+        console.log('[AuthProvider] initial getUser result:', { 
+          hasUser: !!user, 
+          userId: user?.id,
+          error: error?.message 
+        })
+        if (user) loadPlayer(user)
+        else       setPlayer(null)
+      }).catch(err => {
+        console.error('[AuthProvider] !! getUser mount crash:', err)
+      }).finally(() => {
+        initialized.current = true
       })
-      if (user) loadPlayer(user)
-      else       setPlayer(null)
-    }).catch(err => {
-      console.error('[AuthProvider] !! getUser mount crash:', err)
-    })
+    }
 
     // Subscribe to auth state changes (login / logout / token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
