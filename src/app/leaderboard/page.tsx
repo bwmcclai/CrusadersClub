@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import Navbar from '@/components/layout/Navbar'
@@ -12,44 +12,37 @@ import {
 import { getTierForLevel, PRESET_AVATARS } from '@/lib/xp'
 import FlagAvatar from '@/components/ui/FlagAvatar'
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
+// We will fetch from Supabase on mount
+import { getSupabaseClient } from '@/lib/supabase'
 
-const MOCK_PLAYERS = [
-  { id: '1', username: 'GirthQuake_69', avatar: PRESET_AVATARS[11].url, level: 50, elo: 2941, wins: 387, losses: 89, games: 476, maps: 8, delta: 0 },
-  { id: '2', username: 'Throbbin_Hood', avatar: PRESET_AVATARS[0].url, level: 48, elo: 2847, wins: 312, losses: 100, games: 412, maps: 3, delta: +2 },
-  { id: '3', username: 'Dixie_Normous', avatar: PRESET_AVATARS[10].url, level: 47, elo: 2793, wins: 295, losses: 108, games: 403, maps: 6, delta: -1 },
-  { id: '4', username: 'Hugh_Jass_666', avatar: PRESET_AVATARS[8].url, level: 45, elo: 2712, wins: 271, losses: 112, games: 383, maps: 2, delta: +1 },
-  { id: '5', username: 'Barry_McCockner', avatar: PRESET_AVATARS[4].url, level: 44, elo: 2655, wins: 254, losses: 119, games: 373, maps: 4, delta: -2 },
-  { id: '6', username: 'Moe_Lester_Official', avatar: PRESET_AVATARS[2].url, level: 42, elo: 2589, wins: 237, losses: 127, games: 364, maps: 1, delta: +3 },
-  { id: '7', username: 'Panty_Raider_99', avatar: PRESET_AVATARS[8].url, level: 40, elo: 2521, wins: 219, losses: 138, games: 357, maps: 5, delta: 0 },
-  { id: '8', username: 'Sloppy_Toppy_Joe', avatar: PRESET_AVATARS[7].url, level: 38, elo: 2478, wins: 201, losses: 147, games: 348, maps: 0, delta: -1 },
-  { id: '9', username: 'Ben_Dover_N_Take_It', avatar: PRESET_AVATARS[9].url, level: 37, elo: 2431, wins: 188, losses: 152, games: 340, maps: 7, delta: +2 },
-  { id: '10', username: 'Wet_Ass_P-word', avatar: PRESET_AVATARS[6].url, level: 35, elo: 2387, wins: 176, losses: 158, games: 334, maps: 2, delta: -3 },
-  { id: '11', username: 'Mike_Litoris', avatar: PRESET_AVATARS[1].url, level: 34, elo: 2334, wins: 163, losses: 164, games: 327, maps: 3, delta: +1 },
-  { id: '12', username: 'Dong_Zilla_v2', avatar: PRESET_AVATARS[5].url, level: 32, elo: 2289, wins: 152, losses: 169, games: 321, maps: 0, delta: 0 },
-  { id: '13', username: 'Cheeks_Clapper_MD', avatar: PRESET_AVATARS[3].url, level: 30, elo: 2241, wins: 141, losses: 175, games: 316, maps: 1, delta: +4 },
-  { id: '14', username: 'Sweaty_Left_Nut', avatar: PRESET_AVATARS[5].url, level: 29, elo: 2198, wins: 131, losses: 181, games: 312, maps: 2, delta: -2 },
-  { id: '15', username: 'Creamy_Bottom_Text', avatar: PRESET_AVATARS[3].url, level: 27, elo: 2154, wins: 121, losses: 187, games: 308, maps: 0, delta: +1 },
-  { id: '16', username: 'Gluck_Gluck_9000', avatar: PRESET_AVATARS[7].url, level: 25, elo: 2109, wins: 112, losses: 193, games: 305, maps: 4, delta: -1 },
-  { id: '17', username: 'Stepsis_Im_Stuck', avatar: PRESET_AVATARS[6].url, level: 24, elo: 2063, wins: 103, losses: 199, games: 302, maps: 0, delta: +2 },
-  { id: '18', username: 'Big_Coq_Energy', avatar: PRESET_AVATARS[1].url, level: 22, elo: 2018, wins: 95, losses: 205, games: 300, maps: 1, delta: -3 },
-  { id: '19', username: 'The_Clit_Commander', avatar: PRESET_AVATARS[4].url, level: 20, elo: 1974, wins: 88, losses: 210, games: 298, maps: 2, delta: +1 },
-  { id: '20', username: 'RawDog_Richie', avatar: PRESET_AVATARS[0].url, level: 19, elo: 1932, wins: 81, losses: 215, games: 296, maps: 0, delta: 0 }
-]
+type DBPlayer = {
+  id: string
+  username: string
+  avatar_url: string | null
+  level: number
+  elo: number
+  games_won: number
+  games_lost: number
+  games_played: number
+  delta?: number // Mocking delta for now
+  maps?: number // Mocking maps count
+}
+
 
 type Category = 'elo' | 'winrate' | 'victories' | 'creators'
 type Period = 'alltime' | 'season' | 'month'
 
-function winRate(p: typeof MOCK_PLAYERS[0]) {
-  return Math.round((p.wins / p.games) * 100)
+function winRate(p: DBPlayer) {
+  if (!p.games_played) return 0
+  return Math.round((p.games_won / p.games_played) * 100)
 }
 
-function sortedPlayers(players: typeof MOCK_PLAYERS, cat: Category) {
+function sortedPlayers(players: DBPlayer[], cat: Category) {
   return [...players].sort((a, b) => {
     if (cat === 'elo') return b.elo - a.elo
     if (cat === 'winrate') return winRate(b) - winRate(a)
-    if (cat === 'victories') return b.wins - a.wins
-    if (cat === 'creators') return b.maps - a.maps
+    if (cat === 'victories') return b.games_won - a.games_won
+    if (cat === 'creators') return (b.maps || 0) - (a.maps || 0)
     return 0
   })
 }
@@ -59,7 +52,7 @@ function sortedPlayers(players: typeof MOCK_PLAYERS, cat: Category) {
 function PodiumPlayer({
   player, position, value, valueLabel,
 }: {
-  player: typeof MOCK_PLAYERS[0]
+  player: DBPlayer
   position: 1 | 2 | 3
   value: string | number
   valueLabel: string
@@ -96,7 +89,7 @@ function PodiumPlayer({
       <div className={`relative ${position !== 1 ? 'mt-8' : ''}`}>
         <div className={`${m.glow} rounded-full`}>
           <FlagAvatar
-            flagId={player.avatar}
+            flagId={player.avatar_url}
             size={position === 1 ? 80 : 64}
             fallbackLetter={player.username[0]}
             className={`${sizes[position]} border-[3px]`}
@@ -158,22 +151,43 @@ function RankDelta({ delta }: { delta: number }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function LeaderboardPage() {
+  const [dbPlayers, setDbPlayers] = useState<DBPlayer[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = getSupabaseClient()
+      const { data } = await supabase.from('players').select('*').order('elo', { ascending: false }).limit(100)
+      if (data) {
+        // give them random deltas and maps for mock UI elements that aren't in DB yet
+        const mapped = data.map((d: any) => ({
+          ...d,
+          delta: d.delta ?? Math.floor(Math.random() * 5) - 2,
+          maps: d.maps ?? Math.floor(Math.random() * 10)
+        }))
+        setDbPlayers(mapped)
+      }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
   const [category, setCategory] = useState<Category>('elo')
   const [period, setPeriod] = useState<Period>('alltime')
   const [search, setSearch] = useState('')
 
-  const sorted = sortedPlayers(MOCK_PLAYERS, category)
+  const sorted = sortedPlayers(dbPlayers, category)
   const filtered = sorted.filter((p) =>
     p.username.toLowerCase().includes(search.toLowerCase())
   )
 
   const top3 = sorted.slice(0, 3)
 
-  function primaryValue(p: typeof MOCK_PLAYERS[0]) {
+  function primaryValue(p: DBPlayer) {
     if (category === 'elo') return { value: p.elo, label: 'ELO' }
     if (category === 'winrate') return { value: `${winRate(p)}%`, label: 'WR' }
-    if (category === 'victories') return { value: p.wins, label: 'wins' }
-    return { value: p.maps, label: 'maps' }
+    if (category === 'victories') return { value: p.games_won, label: 'wins' }
+    return { value: p.maps || 0, label: 'maps' }
   }
 
   const categories: { id: Category; label: string; icon: React.ReactNode }[] = [
@@ -217,7 +231,7 @@ export default function LeaderboardPage() {
             LEADERBOARD
           </h1>
           <p className="text-crusader-gold/50 text-sm mt-2 font-cinzel tracking-widest">
-            SEASON 1 · {MOCK_PLAYERS.length.toLocaleString()} COMMANDERS RANKED
+            SEASON 1 · {dbPlayers.length.toLocaleString()} COMMANDERS RANKED
           </p>
         </motion.div>
 
@@ -280,7 +294,7 @@ export default function LeaderboardPage() {
         </motion.div>
 
         {/* ── Podium ──────────────────────────────────────────────────────── */}
-        {!search && (
+        {!search && !loading && top3.length > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -290,6 +304,7 @@ export default function LeaderboardPage() {
             <div className="flex items-end justify-center gap-4 sm:gap-8">
               {([top3[1], top3[0], top3[2]] as const).map((p, i) => {
                 const pos = i === 0 ? 2 : i === 1 ? 1 : 3
+                if (!p) return null
                 const { value, label } = primaryValue(p)
                 return (
                   <PodiumPlayer
@@ -361,14 +376,14 @@ export default function LeaderboardPage() {
 
                         {/* Delta */}
                         <div className="hidden sm:flex justify-center">
-                          <RankDelta delta={player.delta} />
+                          <RankDelta delta={player.delta || 0} />
                         </div>
 
                         {/* Player info */}
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="relative flex-shrink-0">
                             <FlagAvatar
-                              flagId={player.avatar}
+                              flagId={player.avatar_url}
                               size={36}
                               fallbackLetter={player.username[0]}
                               className="w-9 h-9 border-2"
@@ -398,9 +413,9 @@ export default function LeaderboardPage() {
 
                         {/* W/L */}
                         <span className="text-right text-xs text-crusader-gold/60 tabular-nums whitespace-nowrap">
-                          <span className="text-green-400/80">{player.wins}</span>
+                          <span className="text-green-400/80">{player.games_won}</span>
                           <span className="text-crusader-gold/30">/</span>
-                          <span className="text-crusader-crimson-bright/60">{player.losses}</span>
+                          <span className="text-crusader-crimson-bright/60">{player.games_lost}</span>
                         </span>
 
                         {/* Win % */}
@@ -412,7 +427,7 @@ export default function LeaderboardPage() {
 
                         {/* Games */}
                         <span className="hidden lg:block text-right text-xs text-crusader-gold/40 tabular-nums">
-                          {player.games}
+                          {player.games_played}
                         </span>
 
                         {/* Maps */}

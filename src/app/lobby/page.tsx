@@ -11,85 +11,114 @@ import { Sword, Map, Users, Zap, Shield, Clock, Search, Plus, Filter, Bot, Globe
 import { formatMode } from '@/lib/utils'
 import { getSupabaseClient } from '@/lib/supabase'
 import type { LobbyGame, GameMode } from '@/types'
+import TerritoryMap from '@/components/three/TerritoryMap'
+import EarthGlobe from '@/components/three/EarthGlobe'
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_GAMES: LobbyGame[] = [
-  { id: '1', name: 'Western Front',      mode: 'lightning',  status: 'waiting', max_players: 4, current_players: 2, map_name: 'Europe Classic',    creator_name: 'IronFist',    has_ai: false, created_at: new Date(Date.now() - 120000).toISOString() },
-  { id: '2', name: 'Pacific Storm',      mode: 'slow_day',   status: 'waiting', max_players: 6, current_players: 3, map_name: 'Pacific Islands',   creator_name: 'SeaWolf',     has_ai: true,  created_at: new Date(Date.now() - 600000).toISOString() },
-  { id: '3', name: 'Clash at Rhine',     mode: 'lightning',  status: 'waiting', max_players: 3, current_players: 1, map_name: 'Rhine Valley',      creator_name: 'Baron',       has_ai: false, created_at: new Date(Date.now() - 30000).toISOString()  },
-  { id: '4', name: 'Desert Conquest',    mode: 'slow_hour',  status: 'active',  max_players: 4, current_players: 4, map_name: 'Africa Sands',      creator_name: 'SandStorm',   has_ai: false, created_at: new Date(Date.now() - 3600000).toISOString() },
-  { id: '5', name: 'Nordic Campaign',    mode: 'slow_day',   status: 'waiting', max_players: 5, current_players: 2, map_name: 'Nordic Fjords',     creator_name: 'Valhalla',    has_ai: true,  created_at: new Date(Date.now() - 900000).toISOString()  },
-  { id: '6', name: 'Island Hopping',     mode: 'lightning',  status: 'waiting', max_players: 6, current_players: 4, map_name: 'Caribbean',         creator_name: 'Corsair',     has_ai: false, created_at: new Date(Date.now() - 200000).toISOString()  },
-]
-
-const MOCK_FEATURED_MAPS = [
-  { id: 'm1', name: 'Europe Classic',   territories: 42, rating: 4.8, plays: 2100 },
-  { id: 'm2', name: 'Pacific Islands',  territories: 28, rating: 4.5, plays: 1450 },
-  { id: 'm3', name: 'Africa Sands',     territories: 35, rating: 4.7, plays: 980  },
-  { id: 'm4', name: 'Rhine Valley',     territories: 12, rating: 4.6, plays: 540  },
-]
+// ─── Data fetch utilities ─────────────────────────────────────────────────────
 
 // ─── Components ──────────────────────────────────────────────────────────────
 
-function GameCard({ game }: { game: LobbyGame }) {
+function GameCard({ 
+  game, 
+  previewTerritories,
+  onPreviewGlobe 
+}: { 
+  game: LobbyGame, 
+  previewTerritories: any[] | null,
+  onPreviewGlobe: (regionName: string) => void
+}) {
   const isFull = game.current_players >= game.max_players
   const fill   = game.current_players / game.max_players
 
   return (
-    <Card hover glow={isFull ? 'none' : 'gold'} className="p-5">
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium
-              ${game.mode === 'lightning' ? 'border-crusader-gold/30 text-crusader-gold bg-crusader-gold/10' : 'border-crusader-glow/30 text-crusader-glow bg-crusader-glow/10'}`}>
-              {game.mode === 'lightning' ? '⚡' : game.mode === 'slow_hour' ? '⏱' : '📅'}{' '}
-              {game.mode === 'lightning' ? 'Lightning' : game.mode === 'slow_hour' ? '1hr/turn' : '1day/turn'}
-            </span>
-            {game.status === 'active' && (
-              <span className="text-xs px-2 py-0.5 rounded-full border border-green-500/30 text-green-400 bg-green-500/10 font-medium">
-                In Progress
-              </span>
-            )}
-            {game.has_ai && (
-              <span className="text-xs px-2 py-0.5 rounded-full border border-crusader-steel/40 text-crusader-gold/60 bg-crusader-steel/20">
-                <Bot size={10} className="inline mr-1" />AI
-              </span>
-            )}
-          </div>
-          <h3 className="font-cinzel font-semibold text-crusader-gold-light truncate">{game.name}</h3>
-        </div>
-        <Link href={`/game/${game.id}`}>
-          <Button
-            size="sm"
-            variant={isFull ? 'ghost' : 'gold'}
-            disabled={isFull && game.status === 'active'}
-          >
-            {game.status === 'active' ? 'Watch' : isFull ? 'Full' : 'Join'}
+    <Card hover glow={isFull ? 'none' : 'gold'} className="flex flex-col overflow-hidden p-0 relative group">
+      {/* Thumbnail section */}
+      <div 
+        className="relative w-full h-44 flex-shrink-0 bg-crusader-dark/50 border-b border-crusader-gold/10 flex items-center justify-center p-3 cursor-pointer group/map"
+        onClick={() => onPreviewGlobe(game.region_name)}
+      >
+        {previewTerritories ? (
+           <TerritoryMap territories={previewTerritories} className="w-full h-full opacity-70 group-hover/map:opacity-100 transition-opacity drop-shadow-md pointer-events-none" />
+        ) : (
+           <div className="w-full h-full animate-pulse bg-crusader-gold/5 rounded" />
+        )}
+        
+        {/* Gradients */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent pointer-events-none" />
+        
+        {/* Hover Action */}
+        <div className="absolute custom-backdrop-blur inset-0 bg-crusader-void/40 flex items-center justify-center opacity-0 group-hover/map:opacity-100 transition-opacity">
+          <Button variant="gold" size="sm" icon={<Globe size={14} />} className="pointer-events-none shadow-glow-gold pointer-events-none">
+            View on Globe
           </Button>
-        </Link>
-      </div>
-
-      <div className="flex items-center gap-4 text-xs text-crusader-gold/40 mb-3">
-        <span className="flex items-center gap-1"><Map size={11} /> {game.map_name}</span>
-        <span className="flex items-center gap-1 text-crusader-gold/30">by {game.creator_name}</span>
-      </div>
-
-      {/* Player slots */}
-      <div className="flex items-center gap-2">
-        <div className="flex gap-1 flex-1">
-          {Array.from({ length: game.max_players }).map((_, i) => (
-            <div
-              key={i}
-              className={`flex-1 h-1.5 rounded-full transition-all ${
-                i < game.current_players ? 'bg-crusader-gold' : 'bg-crusader-gold/10'
-              }`}
-            />
-          ))}
         </div>
-        <span className="text-xs text-crusader-gold/50 whitespace-nowrap">
-          <Users size={10} className="inline mr-1" />
-          {game.current_players}/{game.max_players}
-        </span>
+        
+        {/* Map Name */}
+        <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-cinzel font-bold text-crusader-gold/90 drop-shadow-md">
+            <Map size={12} /> {game.map_name}
+          </div>
+          {game.has_ai && (
+            <span className="text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded border border-crusader-steel/40 text-crusader-gold/60 bg-crusader-steel/20 shadow-md">
+              <Bot size={10} className="inline mr-1" />AI
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Info Section */}
+      <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between min-w-0 bg-gradient-to-br from-transparent to-crusader-gold/5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-cinzel text-lg font-bold text-crusader-parchment truncate leading-tight drop-shadow-sm">{game.name}</h3>
+            <p className="text-xs text-crusader-gold/50 flex items-center gap-1.5 mt-1.5">
+              <Shield size={12} className="text-crusader-gold/30" /> Hosted by {game.creator_name || 'System'}
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5 items-end flex-shrink-0">
+             <span className={`text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border ${game.mode === 'lightning' ? 'border-crusader-gold/30 text-crusader-gold bg-crusader-gold/10' : 'border-crusader-glow/30 text-crusader-glow bg-crusader-glow/10'}`}>
+                {game.mode === 'lightning' ? '⚡ Light' : game.mode === 'slow_hour' ? '⏱ 1hr' : '📅 1day'}
+              </span>
+              {game.status === 'active' && (
+                <span className="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-green-500/30 text-green-400 bg-green-500/10 shadow-[0_0_10px_rgba(34,197,94,0.2)]">
+                  In Progress
+                </span>
+              )}
+          </div>
+        </div>
+
+        {/* Bottom row: Players */}
+        <div className="flex items-center justify-between mt-5 pt-4 border-t border-crusader-gold/10">
+          <div className="flex items-center gap-2 flex-1 mr-4">
+            <Users size={14} className="text-crusader-gold/50 flex-shrink-0" />
+            <div className="flex gap-1 flex-1 max-w-[140px]">
+              {Array.from({ length: game.max_players }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`flex-1 h-1.5 rounded-full transition-all ${
+                    i < game.current_players ? 'bg-crusader-gold shadow-glow-gold' : 'bg-crusader-dark border border-crusader-gold/10'
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-xs font-cinzel font-bold text-crusader-gold/70 flex-shrink-0">
+              {game.current_players}/{game.max_players}
+            </span>
+          </div>
+
+          <div className="flex-shrink-0 text-right">
+            <Link href={`/game/${game.id}`}>
+              <Button
+                size="sm"
+                variant={isFull ? 'ghost' : 'gold'}
+                disabled={isFull && game.status === 'active'}
+                className="w-24 px-0 justify-center h-8 text-xs"
+              >
+                {game.status === 'active' ? 'Watch' : isFull ? 'Spectate' : 'Join'}
+              </Button>
+            </Link>
+          </div>
+        </div>
       </div>
     </Card>
   )
@@ -126,7 +155,7 @@ function CreateGameModal({
     mapId: initialMapId ?? '',
     aiCount: initialAiCount ?? 0,
   })
-  const [maps, setMaps] = useState<BattleMapPreview[]>(MOCK_FEATURED_MAPS)
+  const [maps, setMaps] = useState<BattleMapPreview[]>([])
   const [loading, setLoading] = useState(false)
 
   // Sync initial props when modal opens with pre-selected map
@@ -298,6 +327,58 @@ export default function LobbyPage() {
   const [search, setSearch]           = useState('')
   const [modeFilter, setModeFilter]   = useState<GameMode | 'all'>('all')
   const [showCreate, setShowCreate]   = useState(false)
+  const [mapPreviewData, setMapPreviewData] = useState<any[] | null>(null)
+  const [games, setGames]             = useState<LobbyGame[]>([])
+  const [featuredMaps, setFeaturedMaps] = useState<any[]>([])
+  
+  // Globe Preview Modal State
+  const [previewRegion, setPreviewRegion] = useState<string | null>(null)
+
+  // Map arbitrary region names back to lat/lon roughly
+  const REGION_COORDS: Record<string, [number, number]> = {
+    'Europe': [54, 15],
+    'Africa': [5, 22],
+    'Americas': [15, -90],
+    'Pacific': [0, 160],
+    'Asia': [45, 90],
+    'Oceania': [-25, 140],
+  }
+
+  // Fetch games and featured maps
+  useEffect(() => {
+    async function fetchData() {
+      const supabase = getSupabaseClient()
+      
+      // Fetch lobby games
+      const { data: gamesData } = await supabase
+        .from('lobby_games')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (gamesData) {
+        setGames(gamesData)
+      }
+
+      // Fetch featured maps for sidebar
+      const { data: mapsData } = await supabase
+        .from('battle_maps')
+        .select('id, name, territories, play_count')
+        .eq('is_public', true)
+        .order('play_count', { ascending: false })
+        .limit(4)
+        
+      if (mapsData) {
+        setFeaturedMaps(mapsData.map((m: any) => ({
+          id:          m.id,
+          name:        m.name,
+          territories: Array.isArray(m.territories) ? m.territories.length : 0,
+          rating:      5.0, // Default mock rating
+          plays:       m.play_count ?? 0,
+        })))
+      }
+    }
+    fetchData()
+  }, [])
 
   // Pre-populate from Map Creator redirect (?newMapId=xxx&mode=...&maxPlayers=...&aiCount=...)
   const newMapId      = searchParams.get('newMapId')    ?? undefined
@@ -309,8 +390,24 @@ export default function LobbyPage() {
     if (newMapId) setShowCreate(true)
   }, [newMapId])
 
-  const filtered = MOCK_GAMES.filter((g) => {
-    const matchSearch = g.name.toLowerCase().includes(search.toLowerCase()) || g.map_name.toLowerCase().includes(search.toLowerCase())
+  // Fetch real map data from db to use for previews
+  useEffect(() => {
+    async function fetchMapPreview() {
+      const { data } = await getSupabaseClient()
+        .from('battle_maps')
+        .select('territories')
+        .limit(1)
+        .single()
+      if (data?.territories) {
+        setMapPreviewData(typeof data.territories === 'string' ? JSON.parse(data.territories) : data.territories)
+      }
+    }
+    fetchMapPreview()
+  }, [])
+
+  const filtered = games.filter((g) => {
+    const creatorName = g.creator_name || 'System'
+    const matchSearch = g.name.toLowerCase().includes(search.toLowerCase()) || g.map_name.toLowerCase().includes(search.toLowerCase()) || creatorName.toLowerCase().includes(search.toLowerCase())
     const matchMode   = modeFilter === 'all' || g.mode === modeFilter
     return matchSearch && matchMode
   })
@@ -379,8 +476,8 @@ export default function LobbyPage() {
                 <h2 className="font-cinzel text-sm font-semibold text-crusader-gold/60 tracking-widest uppercase mb-3">
                   Open — Join Now
                 </h2>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {waiting.map((g) => <GameCard key={g.id} game={g} />)}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {waiting.map((g) => <GameCard key={g.id} game={g} previewTerritories={mapPreviewData} onPreviewGlobe={setPreviewRegion} />)}
                 </div>
               </div>
             )}
@@ -391,8 +488,8 @@ export default function LobbyPage() {
                 <h2 className="font-cinzel text-sm font-semibold text-crusader-gold/60 tracking-widest uppercase mb-3">
                   In Progress — Spectate
                 </h2>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {active.map((g) => <GameCard key={g.id} game={g} />)}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {active.map((g) => <GameCard key={g.id} game={g} previewTerritories={mapPreviewData} onPreviewGlobe={setPreviewRegion} />)}
                 </div>
               </div>
             )}
@@ -430,7 +527,7 @@ export default function LobbyPage() {
                 <Link href="/maps" className="text-xs text-crusader-gold/40 hover:text-crusader-gold">View all</Link>
               </div>
               <div className="space-y-3">
-                {MOCK_FEATURED_MAPS.map((map) => (
+                {featuredMaps.map((map) => (
                   <div key={map.id} className="flex items-center justify-between py-2 border-b border-crusader-gold/5 last:border-0">
                     <div>
                       <p className="text-sm font-medium text-crusader-gold-light/80">{map.name}</p>
@@ -468,6 +565,22 @@ export default function LobbyPage() {
         initialMaxPlayers={presetPlayers}
         initialAiCount={presetAi}
       />
+
+      <Modal open={previewRegion !== null} onClose={() => setPreviewRegion(null)} title={previewRegion ? `Region: ${previewRegion}` : 'Map Preview'} size="lg">
+        <div className="w-full h-[400px] sm:h-[500px] overflow-hidden rounded-xl bg-crusader-void border border-crusader-gold/20 relative">
+           <EarthGlobe 
+             interactive={true} 
+             autoRotate={false} 
+             focusLatLon={previewRegion && REGION_COORDS[previewRegion] ? REGION_COORDS[previewRegion] : undefined}
+           />
+           <div className="absolute top-4 right-4 pointer-events-none">
+             <div className="glass px-3 py-1.5 rounded-full border border-crusader-gold/20 flex items-center gap-2">
+                 <Globe size={14} className="text-crusader-gold" />
+                 <span className="text-xs font-cinzel text-crusader-gold tracking-widest">INTERACTIVE 3D GLOBE</span>
+             </div>
+           </div>
+        </div>
+      </Modal>
     </div>
   )
 }

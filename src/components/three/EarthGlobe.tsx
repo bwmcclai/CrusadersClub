@@ -1,9 +1,9 @@
 'use client'
 import {
-  useRef, useEffect, useState, useMemo, useCallback,
+  useRef, useEffect, useState, useMemo, useCallback, Suspense
 } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Stars, Line, Html } from '@react-three/drei'
+import { OrbitControls, Stars, Line, Html, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { feature } from 'topojson-client'
 import { geoContains } from 'd3-geo'
@@ -75,35 +75,22 @@ const earthFragmentShader = /* glsl */`
   }
 
   void main() {
-    vec3 deepOcean  = vec3(0.85, 0.80, 0.65);
-    vec3 shallowSea = vec3(0.90, 0.85, 0.70);
-    vec3 coastLine  = vec3(0.55, 0.45, 0.27);
-    vec3 land       = vec3(0.82, 0.73, 0.56);
-    vec3 highland   = vec3(0.73, 0.62, 0.42);
-    vec3 ice        = vec3(0.88, 0.80, 0.65);
+    vec3 parchmentDark  = vec3(0.78, 0.68, 0.50);
+    vec3 parchmentLight = vec3(0.88, 0.82, 0.65);
 
-    float n = fbm(vPosition * 1.6);
+    // Apply high-frequency noise for paper fiber texture
+    float n = fbm(vPosition * 4.0);
 
-    vec3 color;
-    if (n < 0.42)      color = mix(deepOcean, shallowSea, smoothstep(0.35, 0.42, n));
-    else if (n < 0.46) color = mix(shallowSea, coastLine, smoothstep(0.42, 0.46, n));
-    else if (n < 0.60) color = mix(land, highland, smoothstep(0.46, 0.60, n));
-    else               color = highland;
+    vec3 color = mix(parchmentDark, parchmentLight, n);
 
-    float lat = abs(vNormal.y);
-    color = mix(color, ice, smoothstep(0.78, 0.92, lat));
+    // Subtle edge vignette
+    float viewDot = max(dot(vNormal, normalize(-vPosition)), 0.0);
+    color *= smoothstep(0.0, 0.7, viewDot) * 0.4 + 0.6;
 
     vec3 lightDir = normalize(vec3(2.0, 1.0, 1.5));
     float diff = clamp(dot(vNormal, lightDir), 0.0, 1.0);
     // Matte paper feel
-    color *= 0.4 + diff * 0.6;
-
-    if (n < 0.42) {
-      vec3 viewDir = normalize(-vPosition);
-      vec3 h = normalize(lightDir + viewDir);
-      float spec = pow(max(dot(vNormal, h), 0.0), 32.0);
-      color += vec3(0.3, 0.25, 0.15) * spec * 0.1; // Reduced, warmer specular
-    }
+    color *= 0.6 + diff * 0.4;
     gl_FragColor = vec4(color, 1.0);
   }
 `
@@ -129,13 +116,15 @@ const atmosphereFragmentShader = /* glsl */`
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function EarthMesh() {
-  const material = useMemo(() => new THREE.ShaderMaterial({
-    vertexShader:   earthVertexShader,
-    fragmentShader: earthFragmentShader,
-  }), [])
+  const texture = useTexture('/earth.jpg')
   return (
-    <mesh material={material}>
+    <mesh>
       <sphereGeometry args={[1, 80, 80]} />
+      <meshStandardMaterial 
+        map={texture} 
+        roughness={0.7} 
+        color="#e4d5b7" // slight parchment tint over the realistic earth
+      />
     </mesh>
   )
 }
@@ -357,6 +346,7 @@ export interface EarthGlobeProps {
   onContinentSelect?:    (continent: ContinentId, countryIds: number[], features: GeoJSON.Feature[]) => void
   onMultiCountryToggle?: (id: number, name: string, feature: GeoJSON.Feature) => void
   onCountrySelect?:      (id: number, name: string, feature: GeoJSON.Feature) => void
+  focusLatLon?:          [number, number]
   className?:            string
 }
 
@@ -368,6 +358,7 @@ export default function EarthGlobe({
   onContinentSelect,
   onMultiCountryToggle,
   onCountrySelect,
+  focusLatLon,
   className      = 'w-full h-full',
 }: EarthGlobeProps) {
   const [worldData, setWorldData]         = useState<Topology | null>(null)
@@ -414,10 +405,15 @@ export default function EarthGlobe({
     ? CONTINENT_INFO[hoveredContinent].label
     : hovered?.name ?? null
 
+  const initCamPos = useMemo(() => {
+    if (!focusLatLon) return [0, 0, 2.5] as const
+    return latLonToVec3(focusLatLon[0], focusLatLon[1], 2.5).toArray() as [number, number, number]
+  }, [focusLatLon])
+
   return (
     <div className={`relative ${className}`}>
       <Canvas
-        camera={{ position: [0, 0, 2.5], fov: 50, near: 0.1, far: 1000 }}
+        camera={{ position: initCamPos, fov: 50, near: 0.1, far: 1000 }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >
@@ -427,7 +423,9 @@ export default function EarthGlobe({
 
         <Stars radius={100} depth={60} count={6000} factor={4} saturation={0} fade speed={0.5} />
 
-        <EarthMesh />
+        <Suspense fallback={null}>
+          <EarthMesh />
+        </Suspense>
         <Atmosphere />
 
         {features.length > 0 && (

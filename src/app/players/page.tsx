@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import Navbar from '@/components/layout/Navbar'
@@ -11,36 +11,24 @@ import {
   Star, Zap, Clock, X, UserPlus, Swords, ChevronDown,
 } from 'lucide-react'
 import { getTierForLevel, PRESET_AVATARS, LEVEL_TIERS } from '@/lib/xp'
+import FlagAvatar from '@/components/ui/FlagAvatar'
 
-// ─── Mock Players ─────────────────────────────────────────────────────────────
+// We will fetch from Supabase on mount
+import { getSupabaseClient } from '@/lib/supabase'
 
-const ALL_PLAYERS = [
-
-    { id: '1', username: 'GirthQuake_69', avatar: PRESET_AVATARS[11].url, level: 50, elo: 2941, wins: 387, losses: 89, games: 476, maps: 8, online: true, lastSeen: 'Online now' },
-    { id: '2', username: 'Throbbin_Hood', avatar: PRESET_AVATARS[0].url, level: 48, elo: 2847, wins: 312, losses: 100, games: 412, maps: 3, online: true, lastSeen: 'Online now' },
-    { id: '3', username: 'Dixie_Normous', avatar: PRESET_AVATARS[10].url, level: 47, elo: 2793, wins: 295, losses: 108, games: 403, maps: 6, online: false, lastSeen: '2h ago' },
-    { id: '4', username: 'Hugh_Jass_666', avatar: PRESET_AVATARS[8].url, level: 45, elo: 2712, wins: 271, losses: 112, games: 383, maps: 2, online: true, lastSeen: 'Online now' },
-    { id: '5', username: 'Barry_McCockner', avatar: PRESET_AVATARS[4].url, level: 44, elo: 2655, wins: 254, losses: 119, games: 373, maps: 4, online: false, lastSeen: '5h ago' },
-    { id: '6', username: 'Moe_Lester_Official', avatar: PRESET_AVATARS[2].url, level: 42, elo: 2589, wins: 237, losses: 127, games: 364, maps: 1, online: false, lastSeen: '1d ago' },
-    { id: '7', username: 'Panty_Raider_99', avatar: PRESET_AVATARS[8].url, level: 40, elo: 2521, wins: 219, losses: 138, games: 357, maps: 5, online: true, lastSeen: 'Online now' },
-    { id: '8', username: 'Sloppy_Toppy_Joe', avatar: PRESET_AVATARS[7].url, level: 38, elo: 2478, wins: 201, losses: 147, games: 348, maps: 0, online: false, lastSeen: '3h ago' },
-    { id: '9', username: 'Ben_Dover_N_Take_It', avatar: PRESET_AVATARS[9].url, level: 37, elo: 2431, wins: 188, losses: 152, games: 340, maps: 7, online: true, lastSeen: 'Online now' },
-    { id: '10', username: 'Wet_Ass_P-word', avatar: PRESET_AVATARS[6].url, level: 35, elo: 2387, wins: 176, losses: 158, games: 334, maps: 2, online: false, lastSeen: '12h ago' },
-    { id: '11', username: 'Mike_Litoris', avatar: PRESET_AVATARS[1].url, level: 34, elo: 2334, wins: 163, losses: 164, games: 327, maps: 3, online: false, lastSeen: '2d ago' },
-    { id: '12', username: 'Dong_Zilla_v2', avatar: PRESET_AVATARS[5].url, level: 32, elo: 2289, wins: 152, losses: 169, games: 321, maps: 0, online: true, lastSeen: 'Online now' },
-    { id: '13', username: 'Cheeks_Clapper_MD', avatar: PRESET_AVATARS[3].url, level: 30, elo: 2241, wins: 141, losses: 175, games: 316, maps: 1, online: false, lastSeen: '6h ago' },
-    { id: '14', username: 'Sweaty_Left_Nut', avatar: PRESET_AVATARS[5].url, level: 29, elo: 2198, wins: 131, losses: 181, games: 312, maps: 2, online: false, lastSeen: '1d ago' },
-    { id: '15', username: 'Creamy_Bottom_Text', avatar: PRESET_AVATARS[3].url, level: 27, elo: 2154, wins: 121, losses: 187, games: 308, maps: 0, online: true, lastSeen: 'Online now' },
-    { id: '16', username: 'Gluck_Gluck_9000', avatar: PRESET_AVATARS[7].url, level: 25, elo: 2109, wins: 112, losses: 193, games: 305, maps: 4, online: false, lastSeen: '4h ago' },
-    { id: '17', username: 'Stepsis_Im_Stuck', avatar: PRESET_AVATARS[6].url, level: 24, elo: 2063, wins: 103, losses: 199, games: 302, maps: 0, online: false, lastSeen: '2d ago' },
-    { id: '18', username: 'Big_Coq_Energy', avatar: PRESET_AVATARS[1].url, level: 22, elo: 2018, wins: 95, losses: 205, games: 300, maps: 1, online: true, lastSeen: 'Online now' },
-    { id: '19', username: 'The_Clit_Commander', avatar: PRESET_AVATARS[4].url, level: 20, elo: 1974, wins: 88, losses: 210, games: 298, maps: 2, online: false, lastSeen: '1d ago' },
-    { id: '20', username: 'RawDog_Richie', avatar: PRESET_AVATARS[0].url, level: 19, elo: 1932, wins: 81, losses: 215, games: 296, maps: 0, online: false, lastSeen: '3d ago' },
-    { id: '21', username: 'Suck_My_Unit_69', avatar: PRESET_AVATARS[2].url, level: 18, elo: 1887, wins: 74, losses: 220, games: 294, maps: 0, online: true, lastSeen: 'Online now' },
-    { id: '22', username: 'Buster_Hymen', avatar: PRESET_AVATARS[9].url, level: 16, elo: 1843, wins: 68, losses: 225, games: 293, maps: 3, online: false, lastSeen: '5h ago' },
-    { id: '23', username: 'Anita_Dump_Now', avatar: PRESET_AVATARS[6].url, level: 14, elo: 1798, wins: 62, losses: 230, games: 292, maps: 1, online: false, lastSeen: '2d ago' },
-    { id: '24', username: 'I_F_U_K_E_D_M_O_M', avatar: PRESET_AVATARS[4].url, level: 12, elo: 1754, wins: 57, losses: 235, games: 292, maps: 0, online: true, lastSeen: 'Online now' }
-  ]
+type DBPlayer = {
+  id: string
+  username: string
+  avatar_url: string | null
+  level: number
+  elo: number
+  games_won: number
+  games_lost: number
+  games_played: number
+  online?: boolean
+  lastSeen?: string
+  maps?: number
+}
 
 type SortOption = 'elo' | 'winrate' | 'level' | 'victories'
 type TierFilter = 'all' | string
@@ -50,21 +38,23 @@ type TierFilter = 'all' | string
 function PlayerModal({
   player,
   onClose,
+  allPlayers
 }: {
-  player: typeof ALL_PLAYERS[0] | null
+  player: DBPlayer | null
   onClose: () => void
+  allPlayers: DBPlayer[]
 }) {
   if (!player) return null
   const tier = getTierForLevel(player.level)
-  const wr = Math.round((player.wins / player.games) * 100)
-  const rank = ALL_PLAYERS.sort((a, b) => b.elo - a.elo).indexOf(player) + 1
+  const wr = player.games_played ? Math.round((player.games_won / player.games_played) * 100) : 0
+  const rank = allPlayers.sort((a, b) => b.elo - a.elo).indexOf(player) + 1
 
   const stats = [
     { label: 'ELO Rating', value: player.elo.toLocaleString(), icon: <Shield size={14} />, color: 'text-crusader-glow' },
-    { label: 'Victories', value: player.wins, icon: <Trophy size={14} />, color: 'text-yellow-400' },
+    { label: 'Victories', value: player.games_won, icon: <Trophy size={14} />, color: 'text-yellow-400' },
     { label: 'Win Rate', value: `${wr}%`, icon: <TrendingUp size={14} />, color: wr >= 55 ? 'text-green-400' : 'text-crusader-gold' },
-    { label: 'Games Played', value: player.games, icon: <Sword size={14} />, color: 'text-crusader-gold' },
-    { label: 'Maps Created', value: player.maps, icon: <Map size={14} />, color: 'text-crusader-ice' },
+    { label: 'Games Played', value: player.games_played, icon: <Sword size={14} />, color: 'text-crusader-gold' },
+    { label: 'Maps Created', value: player.maps || 0, icon: <Map size={14} />, color: 'text-crusader-ice' },
     { label: 'Global Rank', value: `#${rank}`, icon: <Star size={14} />, color: 'text-yellow-400' },
   ]
 
@@ -87,11 +77,13 @@ function PlayerModal({
               className="absolute inset-0 rounded-full blur-lg opacity-40"
               style={{ backgroundColor: tier.color }}
             />
-            <img
-              src={player.avatar}
-              alt={player.username}
+            <div className="absolute inset-1 rounded-full border border-crusader-gold/30 z-20 pointer-events-none" />
+            <FlagAvatar
+              flagId={player.avatar_url}
+              size={96}
+              fallbackLetter={player.username[0]}
               style={{ borderColor: tier.color }}
-              className="relative w-24 h-24 rounded-full border-[3px] object-cover bg-crusader-navy"
+              className="relative w-24 h-24 rounded-full border-[3px] bg-crusader-navy"
             />
             {/* Level badge */}
             <div
@@ -138,8 +130,8 @@ function PlayerModal({
         {/* W/L bar */}
         <div className="mb-6">
           <div className="flex justify-between text-xs text-crusader-gold/50 mb-1.5">
-            <span className="text-green-400/80">{player.wins} Wins</span>
-            <span className="text-crusader-crimson-bright/60">{player.losses} Losses</span>
+            <span className="text-green-400/80">{player.games_won} Wins</span>
+            <span className="text-crusader-crimson-bright/60">{player.games_lost} Losses</span>
           </div>
           <div className="h-2 rounded-full overflow-hidden bg-crusader-navy/60 border border-crusader-gold/10">
             <div
@@ -174,12 +166,12 @@ function PlayerCard({
   rank,
   onClick,
 }: {
-  player: typeof ALL_PLAYERS[0]
+  player: DBPlayer
   rank: number
   onClick: () => void
 }) {
   const tier = getTierForLevel(player.level)
-  const wr = Math.round((player.wins / player.games) * 100)
+  const wr = player.games_played ? Math.round((player.games_won / player.games_played) * 100) : 0
 
   return (
     <motion.div
@@ -205,13 +197,15 @@ function PlayerCard({
                 className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-50 transition-opacity duration-300 blur-md"
                 style={{ backgroundColor: tier.color }}
               />
-              <img
-                src={player.avatar}
-                alt={player.username}
+              <div className="absolute inset-0.5 rounded-full border border-crusader-gold/30 z-20 pointer-events-none" />
+              <FlagAvatar
+                flagId={player.avatar_url}
+                size={56}
+                fallbackLetter={player.username[0]}
                 style={{ borderColor: tier.color }}
-                className="relative w-14 h-14 rounded-full border-2 object-cover bg-crusader-navy"
+                className="relative w-14 h-14 rounded-full border-2 bg-crusader-navy"
               />
-              {/* Rank badge */}
+            {/* Rank badge */}
               <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-crusader-void border border-crusader-gold/30 flex items-center justify-center">
                 <span className="text-[9px] font-cinzel font-black text-crusader-gold/70">{rank}</span>
               </div>
@@ -248,7 +242,7 @@ function PlayerCard({
         {/* Stats row */}
         <div className="grid grid-cols-3 divide-x divide-crusader-gold/10 border-t border-crusader-gold/10">
           <div className="px-3 py-2.5 text-center">
-            <p className="font-cinzel font-bold text-sm text-green-400/80">{player.wins}</p>
+            <p className="font-cinzel font-bold text-sm text-green-400/80">{player.games_won}</p>
             <p className="text-[10px] text-crusader-gold/30">Wins</p>
           </div>
           <div className="px-3 py-2.5 text-center">
@@ -258,7 +252,7 @@ function PlayerCard({
             <p className="text-[10px] text-crusader-gold/30">Win Rate</p>
           </div>
           <div className="px-3 py-2.5 text-center">
-            <p className="font-cinzel font-bold text-sm text-crusader-gold/70">{player.games}</p>
+            <p className="font-cinzel font-bold text-sm text-crusader-gold/70">{player.games_played}</p>
             <p className="text-[10px] text-crusader-gold/30">Games</p>
           </div>
         </div>
@@ -286,15 +280,37 @@ function PlayerCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PlayersPage() {
+  const [dbPlayers, setDbPlayers] = useState<DBPlayer[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = getSupabaseClient()
+      const { data } = await supabase.from('players').select('*').order('elo', { ascending: false }).limit(200)
+      if (data) {
+        // Mock some non-DB visual states
+        const mapped = data.map((d: any) => ({
+          ...d,
+          maps: d.maps ?? Math.floor(Math.random() * 5),
+          online: d.online ?? Math.random() > 0.5,
+          lastSeen: d.lastSeen ?? (Math.random() > 0.5 ? 'Online now' : '2h ago')
+        }))
+        setDbPlayers(mapped)
+      }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
   const [search, setSearch] = useState('')
   const [tierFilter, setTierFilter] = useState<TierFilter>('all')
   const [sort, setSort] = useState<SortOption>('elo')
   const [onlineOnly, setOnlineOnly] = useState(false)
-  const [selected, setSelected] = useState<typeof ALL_PLAYERS[0] | null>(null)
+  const [selected, setSelected] = useState<DBPlayer | null>(null)
 
-  const onlineCount = ALL_PLAYERS.filter((p) => p.online).length
+  const onlineCount = dbPlayers.filter((p) => p.online).length
 
-  const filtered = ALL_PLAYERS
+  const filtered = dbPlayers
     .filter((p) => {
       const tier = getTierForLevel(p.level)
       if (search && !p.username.toLowerCase().includes(search.toLowerCase())) return false
@@ -304,13 +320,13 @@ export default function PlayersPage() {
     })
     .sort((a, b) => {
       if (sort === 'elo') return b.elo - a.elo
-      if (sort === 'winrate') return (b.wins / b.games) - (a.wins / a.games)
+      if (sort === 'winrate') return (a.games_played ? b.games_won / b.games_played : 0) - (a.games_played ? a.games_won / a.games_played : 0)
       if (sort === 'level') return b.level - a.level
-      if (sort === 'victories') return b.wins - a.wins
+      if (sort === 'victories') return b.games_won - a.games_won
       return 0
     })
 
-  const allSorted = [...ALL_PLAYERS].sort((a, b) => b.elo - a.elo)
+  const allSorted = [...dbPlayers].sort((a, b) => b.elo - a.elo)
 
   const tierOptions = ['all', ...Array.from(new Set(
     LEVEL_TIERS.map((t) => t.title)
@@ -347,7 +363,7 @@ export default function PlayersPage() {
               <h1 className="font-cinzel text-4xl font-black text-crusader-gold glow-gold">Commanders</h1>
               <div className="flex items-center gap-4 mt-2">
                 <span className="text-sm text-crusader-gold/50">
-                  <span className="text-crusader-gold font-semibold">{ALL_PLAYERS.length}</span> players registered
+                  <span className="text-crusader-gold font-semibold">{dbPlayers.length}</span> players registered
                 </span>
                 <span className="flex items-center gap-1.5 text-sm text-green-400/80">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -475,7 +491,7 @@ export default function PlayersPage() {
       </main>
 
       {/* ── Player modal ─────────────────────────────────────────────────── */}
-      <PlayerModal player={selected} onClose={() => setSelected(null)} />
+      <PlayerModal player={selected} onClose={() => setSelected(null)} allPlayers={dbPlayers} />
     </div>
   )
 }

@@ -26,27 +26,24 @@ export default function FlagAvatar({
     const col = parseInt(coords[0], 10)
     const row = parseInt(coords[1], 10)
     
-    // We assume a 6x4 grid on the Flags.png image.
-    // Width: 1920 / 6 = 320. Height: 1046 / 4 = 261.5
-    // But CSS background-position uses percentages ideally:
-    // x% = (col / (cols - 1)) * 100
-    // y% = (row / (rows - 1)) * 100
     const cols = 6
     const rows = 4
+    const zoom = 1.3 // Zoom in to crop out edges of the shield image
     
-    const xPos = cols > 1 ? (col / (cols - 1)) * 100 : 0
-    const yPos = rows > 1 ? (row / (rows - 1)) * 100 : 0
+    const bgWidth = cols * size * zoom
+    const bgHeight = rows * size * zoom
+    const offsetX = col * (size * zoom) + (size * (zoom - 1)) / 2
+    const offsetY = row * (size * zoom) + (size * (zoom - 1)) / 2
     
     return (
       <div
-        className={cn('relative overflow-hidden rounded-full border-2 border-crusader-gold/50 shadow-inner', className)}
+        className={cn('relative overflow-hidden rounded-full border-2 border-crusader-gold/50 shadow-inner bg-crusader-void', className)}
         style={{
           width: size,
           height: size,
           backgroundImage: 'url(/Flags.png)',
-          backgroundSize: `${cols * 100}% ${rows * 100}%`,
-          backgroundPosition: `${xPos}% ${yPos}%`,
-          backgroundColor: '#1a1a1a', // Fallback
+          backgroundSize: `${bgWidth}px ${bgHeight}px`,
+          backgroundPosition: `-${offsetX}px -${offsetY}px`,
           ...style,
         }}
       />

@@ -9,6 +9,7 @@ import { Sword, Map, Users, Trophy, User, ChevronRight, LogOut } from 'lucide-re
 import { useAppStore } from '@/lib/store'
 import { getSupabaseClient } from '@/lib/supabase'
 import { getTierForLevel } from '@/lib/xp'
+import FlagAvatar from '@/components/ui/FlagAvatar'
 
 export default function LandingPage() {
   const [activeSlide, setActiveSlide] = useState(0)
@@ -62,16 +63,16 @@ export default function LandingPage() {
       {/* ── Background Elements ────────────────────────────────────────────── */}
       <div className="absolute inset-0 z-0">
         {/* Static Background Image integration - Aligned to show the background logo perfectly */}
-        <div className="absolute inset-0 pointer-events-none bg-crusader-void">
+        <div className="absolute inset-0 pointer-events-none bg-crusader-wood-dark">
           <img
             src="/Background.png"
             alt="Background"
-            className="w-full h-full object-cover object-[15%_15%] md:object-[15%_10%] opacity-80 mix-blend-overlay transition-opacity duration-1000 transform scale-[2.2] translate-x-[-20%] md:scale-[1.02] md:translate-x-[2%] translate-y-[15%] md:translate-y-[2%] filter sepia-[0.3] brightness-90 contrast-125"
+            className="w-full h-full object-cover object-[15%_15%] md:object-[15%_10%] opacity-[0.9] transition-opacity duration-1000 transform scale-[2.2] translate-x-[-20%] md:scale-[1.02] md:translate-x-[2%] translate-y-[15%] md:translate-y-[2%] filter sepia-[0.4] brightness-75 contrast-110"
           />
         </div>
         
         {/* Dark vignette for medieval atmosphere */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
       </div>
 
       {/* ── Top Right Auth Actions ──────────────────────────────────────────── */}
@@ -87,15 +88,16 @@ export default function LandingPage() {
             >
               {/* Profile link with avatar */}
               <Link href="/profile" className="flex items-center gap-3 group">
-                {/* Avatar circle */}
-                <div
-                  className="w-9 h-9 rounded-full border-2 flex items-center justify-center font-cinzel font-bold text-sm overflow-hidden flex-shrink-0"
-                  style={{ borderColor: tier?.color, backgroundColor: (player.default_color ?? '#E74C3C') + '33' }}
-                >
-                  {player.avatar_url
-                    ? <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
-                    : <span style={{ color: tier?.color }}>{player.username[0].toUpperCase()}</span>
-                  }
+                {/* Avatar */}
+                <div className="flex-shrink-0">
+                  <FlagAvatar
+                    flagId={player.avatar_url ?? null}
+                    size={36}
+                    fallbackLetter={player.username[0]}
+                    fallbackColor={player.default_color}
+                    className="border-2 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+                    style={{ borderColor: tier?.color }}
+                  />
                 </div>
                 <div className="hidden sm:block text-left">
                   <p className="font-cinzel text-xs font-bold text-crusader-gold group-hover:glow-gold transition-all leading-none tracking-[0.1em]">
