@@ -1,15 +1,19 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Sword, Mail, Lock, User, Chrome } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Card from '@/components/ui/Card'
+import { getSupabaseClient } from '@/lib/supabase'
 
 export default function RegisterPage() {
+  const router = useRouter()
   const [form, setForm]       = useState({ username: '', email: '', password: '', confirm: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [success, setSuccess] = useState(false)
 
   function update(key: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value }))
@@ -21,11 +25,76 @@ export default function RegisterPage() {
       setError('Passwords do not match')
       return
     }
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
     setLoading(true)
     setError('')
-    // TODO: Supabase auth.signUp({ email, password }) + insert profile
-    await new Promise((r) => setTimeout(r, 1000))
+
+    const supabase = getSupabaseClient()
+
+    // Check username isn't taken
+    const { data: existing } = await supabase
+      .from('players')
+      .select('id')
+      .eq('username', form.username.trim())
+      .maybeSingle()
+
+    if (existing) {
+      setError('That commander name is already taken')
+      setLoading(false)
+      return
+    }
+
+    const { error: authError } = await supabase.auth.signUp({
+      email:    form.email,
+      password: form.password,
+      options: {
+        data: { username: form.username.trim() },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    if (authError) {
+      setError(authError.message)
+      setLoading(false)
+      return
+    }
+
+    // If email confirmation is disabled in Supabase, redirect directly
+    // If enabled, show a "check your email" message
+    setSuccess(true)
     setLoading(false)
+  }
+
+  async function handleGoogle() {
+    const supabase = getSupabaseClient()
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-crusader-void flex items-center justify-center p-4">
+        <div className="text-center max-w-md animate-fade-in">
+          <Sword size={48} className="text-crusader-gold mx-auto mb-6 glow-gold" />
+          <h1 className="font-cinzel text-2xl font-bold text-crusader-gold mb-4">
+            Welcome to the Club!
+          </h1>
+          <p className="text-crusader-gold-light/60 mb-8">
+            Check your email to confirm your account, then sign in to begin your conquest.
+          </p>
+          <Link href="/auth/login">
+            <Button size="lg">Sign In</Button>
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -51,7 +120,7 @@ export default function RegisterPage() {
         <Card className="p-8">
           {/* Google OAuth */}
           <Button
-            onClick={() => console.log('Google OAuth')}
+            onClick={handleGoogle}
             variant="outline"
             fullWidth
             size="lg"

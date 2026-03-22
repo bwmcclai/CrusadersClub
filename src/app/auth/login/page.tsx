@@ -1,29 +1,51 @@
 'use client'
 import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Sword, Mail, Lock, Chrome } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Card from '@/components/ui/Card'
+import { getSupabaseClient } from '@/lib/supabase'
 
 export default function LoginPage() {
-  const [email, setEmail]     = useState('')
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo   = searchParams.get('redirect') ?? '/dashboard'
+
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState(searchParams.get('error') === 'oauth_failed'
+    ? 'Google sign-in failed. Please try again.'
+    : '')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
-    // TODO: Supabase auth.signInWithPassword({ email, password })
-    await new Promise((r) => setTimeout(r, 1000))
-    setLoading(false)
+
+    const supabase = getSupabaseClient()
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (authError) {
+      setError(authError.message)
+      setLoading(false)
+      return
+    }
+
+    router.push(redirectTo)
+    router.refresh()
   }
 
   async function handleGoogle() {
-    // TODO: Supabase auth.signInWithOAuth({ provider: 'google' })
-    console.log('Google OAuth')
+    const supabase = getSupabaseClient()
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?redirect=${redirectTo}`,
+      },
+    })
   }
 
   return (
