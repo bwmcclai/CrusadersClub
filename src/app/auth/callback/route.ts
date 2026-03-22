@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerClient } from '@supabase/ssr'
 
 /**
  * OAuth callback handler.
  * Supabase redirects here after Google OAuth with ?code=...
- * We exchange the code for a session, then redirect to dashboard (or original destination).
+ *
+ * IMPORTANT: we must bind the Supabase client to the redirect response
+ * (not to cookieStore from next/headers) so that the session cookies
+ * are actually set on the response the browser receives.
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -12,13 +15,32 @@ export async function GET(request: Request) {
   const redirect = searchParams.get('redirect') ?? '/'
 
   if (code) {
-    const supabase = await createServerSupabaseClient()
+    // Build the redirect response first, then attach cookies to it.
+    const redirectResponse = NextResponse.redirect(`${origin}${redirect}`)
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            // Write session cookies directly onto the redirect response.
+            cookiesToSet.forEach(({ name, value, options }) =>
+              redirectResponse.cookies.set(name, value, options)
+            )
+          },
+        },
+      }
+    )
+
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      return NextResponse.redirect(`${origin}${redirect}`)
+      return redirectResponse  // carries the session cookies
     }
   }
 
-  // Auth failed — send back to login with error
   return NextResponse.redirect(`${origin}/auth/login?error=oauth_failed`)
 }
