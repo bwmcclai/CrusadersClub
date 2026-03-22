@@ -19,7 +19,7 @@ export async function GET(request: Request) {
       {
         cookies: {
           getAll() {
-            return request instanceof Request ? [] : [] // Not used for exchange
+            return cookies().getAll()
           },
           setAll(cookiesToSet: { name: string; value: string; options: any }[]) {
             cookiesToSet.forEach(({ name, value, options }) =>
