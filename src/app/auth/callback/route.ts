@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
 /**
@@ -9,7 +9,7 @@ import { createServerClient } from '@supabase/ssr'
  * (not to cookieStore from next/headers) so that the session cookies
  * are actually set on the response the browser receives.
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code     = searchParams.get('code')
   const redirect = searchParams.get('redirect') ?? '/'
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
           getAll() {
             return request.cookies.getAll()
           },
-          setAll(cookiesToSet) {
+          setAll(cookiesToSet: { name: string; value: string; options: any }[]) {
             // Write session cookies directly onto the redirect response.
             cookiesToSet.forEach(({ name, value, options }) =>
               redirectResponse.cookies.set(name, value, options)

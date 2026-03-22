@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Sword, Map, Trophy, User, Menu, X, LogOut, ChevronDown } from 'lucide-react'
+import { Sword, Map, Trophy, User, Menu, X, LogOut, ChevronDown, Users } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import Button from '@/components/ui/Button'
@@ -13,7 +13,7 @@ import { getTierForLevel } from '@/lib/xp'
 const navLinks = [
   { href: '/lobby',       label: 'Play',        icon: Sword  },
   { href: '/map-creator', label: 'Map Creator',  icon: Map    },
-  { href: '/maps',        label: 'Maps',         icon: Map    },
+  { href: '/players',     label: 'Players',      icon: Users  },
   { href: '/leaderboard', label: 'Leaderboard',  icon: Trophy },
 ]
 
