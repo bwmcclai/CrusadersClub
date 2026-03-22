@@ -52,7 +52,8 @@ export default function RegisterPage() {
       password: form.password,
       options: {
         data: { username: form.username.trim() },
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin}/auth/callback`,
+        // Use window.location.origin — works in dev and prod automatically.
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
 
@@ -70,11 +71,11 @@ export default function RegisterPage() {
 
   async function handleGoogle() {
     const supabase = getSupabaseClient()
-    const base = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin
+    // Use window.location.origin — works in dev and prod automatically.
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${base}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
   }
