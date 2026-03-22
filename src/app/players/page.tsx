@@ -15,32 +15,32 @@ import { getTierForLevel, PRESET_AVATARS, LEVEL_TIERS } from '@/lib/xp'
 // ─── Mock Players ─────────────────────────────────────────────────────────────
 
 const ALL_PLAYERS = [
-  { id: '1',  username: 'Emperor_Voss',   avatar: PRESET_AVATARS[11].url, level: 50, elo: 2941, wins: 387, losses: 89,  games: 476, maps: 8,  online: true,  lastSeen: 'Online now'  },
-  { id: '2',  username: 'IronCrusader',   avatar: PRESET_AVATARS[0].url,  level: 48, elo: 2847, wins: 312, losses: 100, games: 412, maps: 3,  online: true,  lastSeen: 'Online now'  },
-  { id: '3',  username: 'Overlord_Nyx',   avatar: PRESET_AVATARS[10].url, level: 47, elo: 2793, wins: 295, losses: 108, games: 403, maps: 6,  online: false, lastSeen: '2h ago'      },
-  { id: '4',  username: 'GrandMarshal',   avatar: PRESET_AVATARS[8].url,  level: 45, elo: 2712, wins: 271, losses: 112, games: 383, maps: 2,  online: true,  lastSeen: 'Online now'  },
-  { id: '5',  username: 'Templar_Rex',    avatar: PRESET_AVATARS[4].url,  level: 44, elo: 2655, wins: 254, losses: 119, games: 373, maps: 4,  online: false, lastSeen: '5h ago'      },
-  { id: '6',  username: 'SilverKnight',   avatar: PRESET_AVATARS[2].url,  level: 42, elo: 2589, wins: 237, losses: 127, games: 364, maps: 1,  online: false, lastSeen: '1d ago'      },
-  { id: '7',  username: 'ViperCommander', avatar: PRESET_AVATARS[8].url,  level: 40, elo: 2521, wins: 219, losses: 138, games: 357, maps: 5,  online: true,  lastSeen: 'Online now'  },
-  { id: '8',  username: 'StormBrigade',   avatar: PRESET_AVATARS[7].url,  level: 38, elo: 2478, wins: 201, losses: 147, games: 348, maps: 0,  online: false, lastSeen: '3h ago'      },
-  { id: '9',  username: 'Conqueror_XII',  avatar: PRESET_AVATARS[9].url,  level: 37, elo: 2431, wins: 188, losses: 152, games: 340, maps: 7,  online: true,  lastSeen: 'Online now'  },
-  { id: '10', username: 'ArcLight',       avatar: PRESET_AVATARS[6].url,  level: 35, elo: 2387, wins: 176, losses: 158, games: 334, maps: 2,  online: false, lastSeen: '12h ago'     },
-  { id: '11', username: 'NordFrost',      avatar: PRESET_AVATARS[1].url,  level: 34, elo: 2334, wins: 163, losses: 164, games: 327, maps: 3,  online: false, lastSeen: '2d ago'      },
-  { id: '12', username: 'BlazeKing',      avatar: PRESET_AVATARS[5].url,  level: 32, elo: 2289, wins: 152, losses: 169, games: 321, maps: 0,  online: true,  lastSeen: 'Online now'  },
-  { id: '13', username: 'SteelWarden',    avatar: PRESET_AVATARS[3].url,  level: 30, elo: 2241, wins: 141, losses: 175, games: 316, maps: 1,  online: false, lastSeen: '6h ago'      },
-  { id: '14', username: 'CrimsonArcher',  avatar: PRESET_AVATARS[5].url,  level: 29, elo: 2198, wins: 131, losses: 181, games: 312, maps: 2,  online: false, lastSeen: '1d ago'      },
-  { id: '15', username: 'ThunderPaladin', avatar: PRESET_AVATARS[3].url,  level: 27, elo: 2154, wins: 121, losses: 187, games: 308, maps: 0,  online: true,  lastSeen: 'Online now'  },
-  { id: '16', username: 'DuskRaider',     avatar: PRESET_AVATARS[7].url,  level: 25, elo: 2109, wins: 112, losses: 193, games: 305, maps: 4,  online: false, lastSeen: '4h ago'      },
-  { id: '17', username: 'IceBreaker',     avatar: PRESET_AVATARS[6].url,  level: 24, elo: 2063, wins: 103, losses: 199, games: 302, maps: 0,  online: false, lastSeen: '2d ago'      },
-  { id: '18', username: 'PhoenixRising',  avatar: PRESET_AVATARS[1].url,  level: 22, elo: 2018, wins: 95,  losses: 205, games: 300, maps: 1,  online: true,  lastSeen: 'Online now'  },
-  { id: '19', username: 'VaultKeeper',    avatar: PRESET_AVATARS[4].url,  level: 20, elo: 1974, wins: 88,  losses: 210, games: 298, maps: 2,  online: false, lastSeen: '1d ago'      },
-  { id: '20', username: 'Ragnar_Wolf',    avatar: PRESET_AVATARS[0].url,  level: 19, elo: 1932, wins: 81,  losses: 215, games: 296, maps: 0,  online: false, lastSeen: '3d ago'      },
-  { id: '21', username: 'FrostWarden',    avatar: PRESET_AVATARS[2].url,  level: 18, elo: 1887, wins: 74,  losses: 220, games: 294, maps: 0,  online: true,  lastSeen: 'Online now'  },
-  { id: '22', username: 'DawnSentinel',   avatar: PRESET_AVATARS[9].url,  level: 16, elo: 1843, wins: 68,  losses: 225, games: 293, maps: 3,  online: false, lastSeen: '5h ago'      },
-  { id: '23', username: 'CrystalMage',    avatar: PRESET_AVATARS[6].url,  level: 14, elo: 1798, wins: 62,  losses: 230, games: 292, maps: 1,  online: false, lastSeen: '2d ago'      },
-  { id: '24', username: 'IronVeil',       avatar: PRESET_AVATARS[4].url,  level: 12, elo: 1754, wins: 57,  losses: 235, games: 292, maps: 0,  online: true,  lastSeen: 'Online now'  },
-  { id: '25', username: 'NewRecruit_99',  avatar: PRESET_AVATARS[0].url,  level: 3,  elo: 1200, wins: 8,   losses: 14,  games: 22,  maps: 0,  online: false, lastSeen: '1h ago'      },
-]
+
+    { id: '1', username: 'GirthQuake_69', avatar: PRESET_AVATARS[11].url, level: 50, elo: 2941, wins: 387, losses: 89, games: 476, maps: 8, online: true, lastSeen: 'Online now' },
+    { id: '2', username: 'Throbbin_Hood', avatar: PRESET_AVATARS[0].url, level: 48, elo: 2847, wins: 312, losses: 100, games: 412, maps: 3, online: true, lastSeen: 'Online now' },
+    { id: '3', username: 'Dixie_Normous', avatar: PRESET_AVATARS[10].url, level: 47, elo: 2793, wins: 295, losses: 108, games: 403, maps: 6, online: false, lastSeen: '2h ago' },
+    { id: '4', username: 'Hugh_Jass_666', avatar: PRESET_AVATARS[8].url, level: 45, elo: 2712, wins: 271, losses: 112, games: 383, maps: 2, online: true, lastSeen: 'Online now' },
+    { id: '5', username: 'Barry_McCockner', avatar: PRESET_AVATARS[4].url, level: 44, elo: 2655, wins: 254, losses: 119, games: 373, maps: 4, online: false, lastSeen: '5h ago' },
+    { id: '6', username: 'Moe_Lester_Official', avatar: PRESET_AVATARS[2].url, level: 42, elo: 2589, wins: 237, losses: 127, games: 364, maps: 1, online: false, lastSeen: '1d ago' },
+    { id: '7', username: 'Panty_Raider_99', avatar: PRESET_AVATARS[8].url, level: 40, elo: 2521, wins: 219, losses: 138, games: 357, maps: 5, online: true, lastSeen: 'Online now' },
+    { id: '8', username: 'Sloppy_Toppy_Joe', avatar: PRESET_AVATARS[7].url, level: 38, elo: 2478, wins: 201, losses: 147, games: 348, maps: 0, online: false, lastSeen: '3h ago' },
+    { id: '9', username: 'Ben_Dover_N_Take_It', avatar: PRESET_AVATARS[9].url, level: 37, elo: 2431, wins: 188, losses: 152, games: 340, maps: 7, online: true, lastSeen: 'Online now' },
+    { id: '10', username: 'Wet_Ass_P-word', avatar: PRESET_AVATARS[6].url, level: 35, elo: 2387, wins: 176, losses: 158, games: 334, maps: 2, online: false, lastSeen: '12h ago' },
+    { id: '11', username: 'Mike_Litoris', avatar: PRESET_AVATARS[1].url, level: 34, elo: 2334, wins: 163, losses: 164, games: 327, maps: 3, online: false, lastSeen: '2d ago' },
+    { id: '12', username: 'Dong_Zilla_v2', avatar: PRESET_AVATARS[5].url, level: 32, elo: 2289, wins: 152, losses: 169, games: 321, maps: 0, online: true, lastSeen: 'Online now' },
+    { id: '13', username: 'Cheeks_Clapper_MD', avatar: PRESET_AVATARS[3].url, level: 30, elo: 2241, wins: 141, losses: 175, games: 316, maps: 1, online: false, lastSeen: '6h ago' },
+    { id: '14', username: 'Sweaty_Left_Nut', avatar: PRESET_AVATARS[5].url, level: 29, elo: 2198, wins: 131, losses: 181, games: 312, maps: 2, online: false, lastSeen: '1d ago' },
+    { id: '15', username: 'Creamy_Bottom_Text', avatar: PRESET_AVATARS[3].url, level: 27, elo: 2154, wins: 121, losses: 187, games: 308, maps: 0, online: true, lastSeen: 'Online now' },
+    { id: '16', username: 'Gluck_Gluck_9000', avatar: PRESET_AVATARS[7].url, level: 25, elo: 2109, wins: 112, losses: 193, games: 305, maps: 4, online: false, lastSeen: '4h ago' },
+    { id: '17', username: 'Stepsis_Im_Stuck', avatar: PRESET_AVATARS[6].url, level: 24, elo: 2063, wins: 103, losses: 199, games: 302, maps: 0, online: false, lastSeen: '2d ago' },
+    { id: '18', username: 'Big_Coq_Energy', avatar: PRESET_AVATARS[1].url, level: 22, elo: 2018, wins: 95, losses: 205, games: 300, maps: 1, online: true, lastSeen: 'Online now' },
+    { id: '19', username: 'The_Clit_Commander', avatar: PRESET_AVATARS[4].url, level: 20, elo: 1974, wins: 88, losses: 210, games: 298, maps: 2, online: false, lastSeen: '1d ago' },
+    { id: '20', username: 'RawDog_Richie', avatar: PRESET_AVATARS[0].url, level: 19, elo: 1932, wins: 81, losses: 215, games: 296, maps: 0, online: false, lastSeen: '3d ago' },
+    { id: '21', username: 'Suck_My_Unit_69', avatar: PRESET_AVATARS[2].url, level: 18, elo: 1887, wins: 74, losses: 220, games: 294, maps: 0, online: true, lastSeen: 'Online now' },
+    { id: '22', username: 'Buster_Hymen', avatar: PRESET_AVATARS[9].url, level: 16, elo: 1843, wins: 68, losses: 225, games: 293, maps: 3, online: false, lastSeen: '5h ago' },
+    { id: '23', username: 'Anita_Dump_Now', avatar: PRESET_AVATARS[6].url, level: 14, elo: 1798, wins: 62, losses: 230, games: 292, maps: 1, online: false, lastSeen: '2d ago' },
+    { id: '24', username: 'I_F_U_K_E_D_M_O_M', avatar: PRESET_AVATARS[4].url, level: 12, elo: 1754, wins: 57, losses: 235, games: 292, maps: 0, online: true, lastSeen: 'Online now' }
+  ]
 
 type SortOption = 'elo' | 'winrate' | 'level' | 'victories'
 type TierFilter = 'all' | string
@@ -55,17 +55,17 @@ function PlayerModal({
   onClose: () => void
 }) {
   if (!player) return null
-  const tier  = getTierForLevel(player.level)
-  const wr    = Math.round((player.wins / player.games) * 100)
-  const rank  = ALL_PLAYERS.sort((a, b) => b.elo - a.elo).indexOf(player) + 1
+  const tier = getTierForLevel(player.level)
+  const wr = Math.round((player.wins / player.games) * 100)
+  const rank = ALL_PLAYERS.sort((a, b) => b.elo - a.elo).indexOf(player) + 1
 
   const stats = [
-    { label: 'ELO Rating',  value: player.elo.toLocaleString(), icon: <Shield size={14} />,     color: 'text-crusader-glow'  },
-    { label: 'Victories',   value: player.wins,                 icon: <Trophy size={14} />,     color: 'text-yellow-400'     },
-    { label: 'Win Rate',    value: `${wr}%`,                    icon: <TrendingUp size={14} />, color: wr >= 55 ? 'text-green-400' : 'text-crusader-gold' },
-    { label: 'Games Played',value: player.games,                icon: <Sword size={14} />,      color: 'text-crusader-gold'  },
-    { label: 'Maps Created',value: player.maps,                 icon: <Map size={14} />,        color: 'text-crusader-ice'   },
-    { label: 'Global Rank', value: `#${rank}`,                  icon: <Star size={14} />,       color: 'text-yellow-400'     },
+    { label: 'ELO Rating', value: player.elo.toLocaleString(), icon: <Shield size={14} />, color: 'text-crusader-glow' },
+    { label: 'Victories', value: player.wins, icon: <Trophy size={14} />, color: 'text-yellow-400' },
+    { label: 'Win Rate', value: `${wr}%`, icon: <TrendingUp size={14} />, color: wr >= 55 ? 'text-green-400' : 'text-crusader-gold' },
+    { label: 'Games Played', value: player.games, icon: <Sword size={14} />, color: 'text-crusader-gold' },
+    { label: 'Maps Created', value: player.maps, icon: <Map size={14} />, color: 'text-crusader-ice' },
+    { label: 'Global Rank', value: `#${rank}`, icon: <Star size={14} />, color: 'text-yellow-400' },
   ]
 
   return (
@@ -179,7 +179,7 @@ function PlayerCard({
   onClick: () => void
 }) {
   const tier = getTierForLevel(player.level)
-  const wr   = Math.round((player.wins / player.games) * 100)
+  const wr = Math.round((player.wins / player.games) * 100)
 
   return (
     <motion.div
@@ -286,9 +286,9 @@ function PlayerCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PlayersPage() {
-  const [search, setSearch]     = useState('')
+  const [search, setSearch] = useState('')
   const [tierFilter, setTierFilter] = useState<TierFilter>('all')
-  const [sort, setSort]         = useState<SortOption>('elo')
+  const [sort, setSort] = useState<SortOption>('elo')
   const [onlineOnly, setOnlineOnly] = useState(false)
   const [selected, setSelected] = useState<typeof ALL_PLAYERS[0] | null>(null)
 
@@ -303,9 +303,9 @@ export default function PlayersPage() {
       return true
     })
     .sort((a, b) => {
-      if (sort === 'elo')       return b.elo - a.elo
-      if (sort === 'winrate')   return (b.wins / b.games) - (a.wins / a.games)
-      if (sort === 'level')     return b.level - a.level
+      if (sort === 'elo') return b.elo - a.elo
+      if (sort === 'winrate') return (b.wins / b.games) - (a.wins / a.games)
+      if (sort === 'level') return b.level - a.level
       if (sort === 'victories') return b.wins - a.wins
       return 0
     })
@@ -317,10 +317,10 @@ export default function PlayersPage() {
   ))]
 
   const sortOptions: { id: SortOption; label: string }[] = [
-    { id: 'elo',       label: 'ELO Rating'  },
-    { id: 'winrate',   label: 'Win Rate'    },
-    { id: 'level',     label: 'Level'       },
-    { id: 'victories', label: 'Victories'   },
+    { id: 'elo', label: 'ELO Rating' },
+    { id: 'winrate', label: 'Win Rate' },
+    { id: 'level', label: 'Level' },
+    { id: 'victories', label: 'Victories' },
   ]
 
   return (
@@ -400,11 +400,10 @@ export default function PlayersPage() {
             {/* Online toggle */}
             <button
               onClick={() => setOnlineOnly((v) => !v)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-cinzel font-semibold transition-all whitespace-nowrap ${
-                onlineOnly
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-cinzel font-semibold transition-all whitespace-nowrap ${onlineOnly
                   ? 'bg-green-500/15 border-green-500/40 text-green-400'
                   : 'bg-transparent border-crusader-gold/15 text-crusader-gold/40 hover:border-crusader-gold/30'
-              }`}
+                }`}
             >
               <span className={`w-2 h-2 rounded-full ${onlineOnly ? 'bg-green-400 animate-pulse' : 'bg-crusader-gold/30'}`} />
               Online Only
@@ -424,13 +423,12 @@ export default function PlayersPage() {
                     borderColor: (tierDef?.color ?? '#C9A84C') + '66',
                     color: tierDef?.color ?? '#C9A84C',
                   } : undefined}
-                  className={`px-3 py-1.5 rounded-full text-xs font-cinzel font-semibold transition-all border ${
-                    tierFilter === tier
+                  className={`px-3 py-1.5 rounded-full text-xs font-cinzel font-semibold transition-all border ${tierFilter === tier
                       ? tier === 'all'
                         ? 'bg-crusader-gold/20 border-crusader-gold/40 text-crusader-gold'
                         : ''
                       : 'bg-transparent border-crusader-gold/10 text-crusader-gold/40 hover:border-crusader-gold/25 hover:text-crusader-gold/60'
-                  }`}
+                    }`}
                 >
                   {tier === 'all' ? 'All Ranks' : tier}
                 </button>
