@@ -42,12 +42,16 @@ function LoginForm() {
     const supabase = getSupabaseClient()
     // Use window.location.origin so this automatically works in both
     // dev (localhost:3000) and prod (your real domain) with no env var needed.
+    const callbackUrl = `${window.location.origin}/auth/callback`
+    const finalRedirect = redirectTo !== '/' ? `${callbackUrl}?redirect=${redirectTo}` : callbackUrl
+
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?redirect=${redirectTo}`,
+        redirectTo: finalRedirect,
       },
     })
+
   }
 
   return (
