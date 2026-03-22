@@ -2,12 +2,31 @@
 export interface Player {
   id: string
   username: string
-  email: string
   avatar_url?: string
+  default_color: string
+  xp: number
+  level: number
   elo: number
   games_played: number
   games_won: number
+  games_lost: number
   created_at: string
+  updated_at: string
+}
+
+export interface PlayerAchievement {
+  id: string
+  player_id: string
+  achievement_id: string
+  unlocked_at: string
+  achievements: {
+    id: string
+    name: string
+    description: string
+    icon: string
+    category: string
+    xp_reward: number
+  }
 }
 
 // ─── Battle Map ───────────────────────────────────────────────────────────────

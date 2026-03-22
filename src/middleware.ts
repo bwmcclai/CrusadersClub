@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const PROTECTED_ROUTES = ['/dashboard', '/game', '/lobby', '/map-creator', '/profile', '/leaderboard']
+const PROTECTED_ROUTES = ['/dashboard', '/game', '/lobby', '/map-creator', '/profile']
 const AUTH_ROUTES = ['/auth/login', '/auth/register']
 
 export async function middleware(request: NextRequest) {
@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   return supabaseResponse

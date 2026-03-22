@@ -3,8 +3,12 @@
 import React, { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Sword, Map, Users, Trophy, User, ChevronRight } from 'lucide-react'
+import { Sword, Map, Users, Trophy, User, ChevronRight, LogOut } from 'lucide-react'
+import { useAppStore } from '@/lib/store'
+import { getSupabaseClient } from '@/lib/supabase'
+import { getTierForLevel } from '@/lib/xp'
 
 // Dynamic imports
 const ParticleBackground = dynamic(() => import('@/components/ui/ParticleBackground'), { ssr: false })
@@ -12,6 +16,14 @@ const ParticleBackground = dynamic(() => import('@/components/ui/ParticleBackgro
 export default function LandingPage() {
   const [activeSlide, setActiveSlide] = useState(0)
   const [latency, setLatency] = useState(24)
+  const player = useAppStore((s) => s.player)
+  const router = useRouter()
+  const tier   = player ? getTierForLevel(player.level) : null
+
+  async function handleLogout() {
+    await getSupabaseClient().auth.signOut()
+    router.refresh()
+  }
 
   const menuItems = [
     { id: 'campaign', label: 'Start / Continue Campaign', icon: Map, href: '/campaign' },
@@ -69,18 +81,68 @@ export default function LandingPage() {
 
       {/* ── Top Right Auth Actions ──────────────────────────────────────────── */}
       <div className="absolute top-8 right-10 z-50 flex items-center gap-6">
-        <Link
-          href="/auth/login"
-          className="font-cinzel text-crusader-gold/80 hover:text-crusader-gold hover:glow-gold transition-all duration-300 font-bold tracking-[0.2em] text-sm flex items-center gap-2 uppercase"
-        >
-          <User size={16} /> Login
-        </Link>
-        <Link href="/auth/register" className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-crusader-gold to-orange-500 rounded blur opacity-25 group-hover:opacity-60 transition duration-500"></div>
-          <div className="relative font-cinzel bg-[#04060D] border border-crusader-gold/50 px-8 py-3 text-crusader-gold tracking-[0.1em] font-bold text-sm flex items-center justify-center transform skew-x-[-15deg] group-hover:bg-crusader-gold/10 transition-colors shadow-[0_0_15px_rgba(201,168,76,0.3)] inset-0">
-            <span className="transform skew-x-[15deg] uppercase whitespace-nowrap">Create Account</span>
-          </div>
-        </Link>
+        <AnimatePresence mode="wait">
+          {player ? (
+            <motion.div
+              key="authed"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="flex items-center gap-5"
+            >
+              {/* Profile link with avatar */}
+              <Link href="/profile" className="flex items-center gap-3 group">
+                {/* Avatar circle */}
+                <div
+                  className="w-9 h-9 rounded-full border-2 flex items-center justify-center font-cinzel font-bold text-sm overflow-hidden flex-shrink-0"
+                  style={{ borderColor: tier?.color, backgroundColor: (player.default_color ?? '#E74C3C') + '33' }}
+                >
+                  {player.avatar_url
+                    ? <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
+                    : <span style={{ color: tier?.color }}>{player.username[0].toUpperCase()}</span>
+                  }
+                </div>
+                <div className="hidden sm:block text-left">
+                  <p className="font-cinzel text-xs font-bold text-crusader-gold group-hover:glow-gold transition-all leading-none tracking-[0.1em]">
+                    {player.username}
+                  </p>
+                  <p className="text-[10px] leading-none mt-0.5 tracking-widest" style={{ color: tier?.color }}>
+                    Lv {player.level} · {tier?.title}
+                  </p>
+                </div>
+              </Link>
+
+              {/* Logout */}
+              <button
+                onClick={handleLogout}
+                className="font-cinzel text-crusader-gold/50 hover:text-crusader-crimson-bright transition-all duration-300 font-bold tracking-[0.2em] text-sm flex items-center gap-2 uppercase"
+              >
+                <LogOut size={14} /> Logout
+              </button>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="unauthed"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="flex items-center gap-6"
+            >
+              <Link
+                href="/auth/login"
+                className="font-cinzel text-crusader-gold/80 hover:text-crusader-gold hover:glow-gold transition-all duration-300 font-bold tracking-[0.2em] text-sm flex items-center gap-2 uppercase"
+              >
+                <User size={16} /> Login
+              </Link>
+              <Link href="/auth/register" className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-crusader-gold to-orange-500 rounded blur opacity-25 group-hover:opacity-60 transition duration-500" />
+                <div className="relative font-cinzel bg-[#04060D] border border-crusader-gold/50 px-8 py-3 text-crusader-gold tracking-[0.1em] font-bold text-sm flex items-center justify-center transform skew-x-[-15deg] group-hover:bg-crusader-gold/10 transition-colors shadow-[0_0_15px_rgba(201,168,76,0.3)]">
+                  <span className="transform skew-x-[15deg] uppercase whitespace-nowrap">Join</span>
+                </div>
+              </Link>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── Main Layout ────────────────────────────────────────────────────── */}
