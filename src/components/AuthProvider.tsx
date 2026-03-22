@@ -33,11 +33,31 @@ async function ensurePlayer(user: User): Promise<Player | null> {
 
   // 1. Try to fetch existing row
   console.log('[AuthProvider] ensurePlayer: fetching from players table...')
-  const { data: existing, error: fetchError } = await supabase
+  
+  // Add a timeout to avoid indefinite hanging in some environments
+  const fetchPromise = supabase
     .from('players')
     .select('*')
     .eq('id', user.id)
     .maybeSingle()
+
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('DATABASE_QUERY_TIMEOUT')), 8000)
+  )
+
+  let result: any
+  try {
+    result = await Promise.race([fetchPromise, timeoutPromise])
+  } catch (err: any) {
+    if (err.message === 'DATABASE_QUERY_TIMEOUT') {
+      console.error('[AuthProvider] ensurePlayer: !! HANG DETECTED !! The query to the "players" table timed out after 8 seconds.')
+      console.warn('[AuthProvider] ensurePlayer: This usually means the browser is blocking the request (Adblocker) or RLS policies are misconfigured.')
+    }
+    throw err
+  }
+
+  const { data: existing, error: fetchError } = result
+
 
   if (fetchError) {
     console.error('[AuthProvider] ensurePlayer: fetch error:', fetchError.message)
