@@ -31,15 +31,22 @@ async function ensurePlayer(user: User): Promise<Player | null> {
   const supabase = getSupabaseClient()
 
   // 1. Try to fetch existing row
-  const { data: existing } = await supabase
+  const { data: existing, error: fetchError } = await supabase
     .from('players')
     .select('*')
     .eq('id', user.id)
     .maybeSingle()
 
+  if (fetchError) {
+    console.error('[AuthProvider] Error fetching existing player:', fetchError.message)
+    // If it's a transient error, we probably shouldn't try to insert
+    if (fetchError.code !== 'PGRST116') return null // PGRST116 is "no rows found"
+  }
+
   if (existing) return existing as Player
 
   // 2. No row yet — build a unique username
+  console.log('[AuthProvider] Creating new player profile for:', user.id)
   let base     = deriveUsername(user)
   let username = base
   let suffix   = 1
@@ -68,19 +75,25 @@ async function ensurePlayer(user: User): Promise<Player | null> {
     games_lost:    0,
   }
 
-  const { data: created, error } = await supabase
+  const { data: created, error: insertError } = await supabase
     .from('players')
     .insert(newPlayer)
     .select()
     .single()
 
-  if (error) {
-    console.error('[AuthProvider] Failed to create player row:', error.message)
+  if (insertError) {
+    console.error('[AuthProvider] Failed to create player row:', insertError.message)
+    // If it failed because it already exists (race condition), try fetching one last time
+    if (insertError.code === '23505') {
+       const { data: secondFetch } = await supabase.from('players').select('*').eq('id', user.id).maybeSingle()
+       if (secondFetch) return secondFetch as Player
+    }
     return null
   }
 
   return created as Player
 }
+
 
 /**
  * Initializes auth state on mount and subscribes to auth changes.
@@ -95,13 +108,25 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const supabase = getSupabaseClient()
 
     async function loadPlayer(user: User) {
-      const player = await ensurePlayer(user)
-      if (player) setPlayer(player)
-      else         setPlayer(null)
+      console.log('[AuthProvider] Loading player for user:', user.id)
+      try {
+        const player = await ensurePlayer(user)
+        if (player) {
+          console.log('[AuthProvider] Player loaded:', player.username)
+          setPlayer(player)
+        } else {
+          console.warn('[AuthProvider] No player found or created for user')
+          setPlayer(null)
+        }
+      } catch (err) {
+        console.error('[AuthProvider] Failed to load/ensure player:', err)
+        setPlayer(null)
+      }
     }
 
     // Load current session on mount
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(({ data: { user }, error }) => {
+      console.log('[AuthProvider] Initial getUser check:', { hasUser: !!user, error })
       if (user) loadPlayer(user)
       else       setPlayer(null)
     })
@@ -109,11 +134,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     // Subscribe to auth state changes (login / logout / token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('[AuthProvider] Auth state change:', event, session?.user?.id)
         if (session?.user) {
           await loadPlayer(session.user)
         } else {
           setPlayer(null)
         }
+
 
         if (event === 'SIGNED_OUT') {
           router.push('/')

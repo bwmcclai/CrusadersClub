@@ -16,8 +16,13 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet: { name: string; value: string; options: any }[]) {
+          // Update request cookies for the next steps in the request chain
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          
+          // Re-initialize the response to ensure we capture the updated request cookies
           supabaseResponse = NextResponse.next({ request })
+          
+          // Set the updated cookies on the response for the browser
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -26,22 +31,18 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session — wrapped in try/catch so stale/invalid cookies never
-  // crash the middleware or cause phantom "authenticated" redirects in prod.
+  // Refresh session — wrapped in try/catch for safety
   let user: { id: string } | null = null
   try {
     const { data } = await supabase.auth.getUser()
     user = data.user
-  } catch {
-    // Treat any error (network, invalid token, etc.) as unauthenticated
+  } catch (err) {
+    console.warn('[middleware] getUser check failed:', err)
   }
 
   const path = request.nextUrl.pathname
   const isProtected = PROTECTED_ROUTES.some((r) => path.startsWith(r))
 
-  // Only guard protected routes — never redirect away from auth pages.
-  // Auth pages handle the "already logged in" case themselves so that
-  // deep-links and forced re-logins always work in both dev and prod.
   if (isProtected && !user) {
     const loginUrl = new URL('/auth/login', request.url)
     loginUrl.searchParams.set('redirect', path)
@@ -50,6 +51,7 @@ export async function middleware(request: NextRequest) {
 
   return supabaseResponse
 }
+
 
 export const config = {
   matcher: [
