@@ -177,21 +177,19 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
             <div className="absolute top-3 left-3 z-10 flex gap-1">
               <button
                 onClick={() => setShowGlobe(false)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-cinzel font-bold tracking-widest uppercase rounded-sm border transition-all ${
-                  !showGlobe
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-cinzel font-bold tracking-widest uppercase rounded-sm border transition-all ${!showGlobe
                     ? 'bg-crusader-gold/20 border-crusader-gold/60 text-crusader-gold'
                     : 'bg-black/50 border-crusader-gold/20 text-crusader-gold/40 hover:text-crusader-gold/70'
-                }`}
+                  }`}
               >
                 <Map size={10} /> Map
               </button>
               <button
                 onClick={() => setShowGlobe(true)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-cinzel font-bold tracking-widest uppercase rounded-sm border transition-all ${
-                  showGlobe
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-cinzel font-bold tracking-widest uppercase rounded-sm border transition-all ${showGlobe
                     ? 'bg-crusader-gold/20 border-crusader-gold/60 text-crusader-gold'
                     : 'bg-black/50 border-crusader-gold/20 text-crusader-gold/40 hover:text-crusader-gold/70'
-                }`}
+                  }`}
               >
                 <Globe size={10} /> Globe
               </button>
@@ -249,9 +247,9 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
             {/* Stats grid */}
             <div className="grid grid-cols-3 gap-2">
               {[
-                { label: 'Territories', value: territoryCount,      icon: Layers },
-                { label: 'Plays',       value: map.play_count ?? 0, icon: Sword  },
-                { label: 'Bonuses',     value: bonusGroups.length,  icon: Star   },
+                { label: 'Territories', value: territoryCount, icon: Layers },
+                { label: 'Plays', value: map.play_count ?? 0, icon: Sword },
+                { label: 'Bonuses', value: bonusGroups.length, icon: Star },
               ].map(({ label, value, icon: Icon }) => (
                 <div key={label} className="bg-crusader-dark/40 border border-crusader-gold/10 rounded-sm p-3 text-center">
                   <Icon size={13} className="text-crusader-gold/50 mx-auto mb-1" />
@@ -294,10 +292,10 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
             {/* CTA */}
             <div className="mt-auto pt-2">
               <Link href={player ? `/lobby?mapId=${map.id}` : '#'}>
-                <Button 
-                  variant="gold" 
-                  fullWidth 
-                  icon={<Sword size={15} />} 
+                <Button
+                  variant="gold"
+                  fullWidth
+                  icon={<Sword size={15} />}
                   className={cn("font-cinzel font-bold tracking-widest", !player && "opacity-50 cursor-not-allowed")}
                   disabled={!player}
                   title={!player ? "Login to play" : undefined}
@@ -317,14 +315,14 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
 
 export default function MapsPage() {
   const player = useAppStore(s => s.player)
-  const [maps, setMaps]           = useState<MapRecord[]>([])
-  const [filtered, setFiltered]   = useState<MapRecord[]>([])
-  const [loading, setLoading]     = useState(true)
+  const [maps, setMaps] = useState<MapRecord[]>([])
+  const [filtered, setFiltered] = useState<MapRecord[]>([])
+  const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [search, setSearch]       = useState('')
+  const [search, setSearch] = useState('')
   const [selectedMap, setSelectedMap] = useState<MapRecord | null>(null)
-  const [page, setPage]           = useState(0)
-  const [hasMore, setHasMore]     = useState(true)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
 
   const PAGE_SIZE = 12
 
@@ -411,15 +409,15 @@ export default function MapsPage() {
                 {loading
                   ? 'Loading battle maps…'
                   : maps.length > 0
-                  ? `${maps.length} battle map${maps.length !== 1 ? 's' : ''} forged for the realm`
-                  : 'No maps yet — be the first to forge one'}
+                    ? `${maps.length} community created map${maps.length !== 1 ? 's' : ''}`
+                    : 'No maps yet — be the first to forge one'}
               </p>
             </div>
 
             <Link href={player ? "/map-creator" : "/auth/login"} className="flex-shrink-0">
-              <Button 
-                variant="gold" 
-                icon={<Plus size={16} />} 
+              <Button
+                variant="gold"
+                icon={<Plus size={16} />}
                 className="font-cinzel font-bold tracking-widest"
                 title={!player ? "Login to create a map" : undefined}
               >

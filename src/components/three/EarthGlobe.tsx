@@ -15,6 +15,17 @@ import {
   getContinentCountryIds,
   CONTINENT_INFO,
 } from '@/lib/geoData'
+import type { Territory } from '@/types'
+
+// ─── Zone Overlay Palette ─────────────────────────────────────────────────────
+// One distinct color per territory (NCAA-style: each city gets its own colour)
+
+const ZONE_PALETTE = [
+  '#C94040', '#3A7EC5', '#2E8B57', '#D4A843', '#7B4C96',
+  '#2E8B8B', '#C96C30', '#8C3E8C', '#4C8C4C', '#3E6B8C',
+  '#8C5A3E', '#5A3E8C', '#3E8C6B', '#8C3E5A', '#6B8C3E',
+  '#8C7A3E', '#3E5A8C', '#8C4C3E', '#5A8C3E', '#8C3E6B',
+]
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -39,6 +50,161 @@ function vec3ToLatLon(p: THREE.Vector3): [number, number] {
 
 function ringToPoints(ring: number[][], r = 1.002): THREE.Vector3[] {
   return ring.map(([lon, lat]) => latLonToVec3(lat, lon, r))
+}
+
+/** Inverse Mercator — pixel (x,y) at projection size w×h → [lon, lat] */
+function invMercator(x: number, y: number, w = 1200, h = 600): [number, number] {
+  const lon   = x * 360 / w - 180
+  const mercN = (h / 2 - y) * (2 * Math.PI) / w
+  const lat   = (2 * Math.atan(Math.exp(mercN)) - Math.PI / 2) * (180 / Math.PI)
+  return [lon, lat]
+}
+
+// ─── Zone Overlays ────────────────────────────────────────────────────────────
+// Paints Voronoi territory polygons onto a 2048×1024 canvas in equirectangular
+// space, then wraps that canvas as a transparent texture on a sphere sitting
+// just above the globe surface.  Three.js SphereGeometry uses equirectangular
+// UV (u = (lon+180)/360, v = (lat+90)/180) so the canvas pixels align exactly
+// with the globe.  Each territory gets a unique colour (NCAA-map style).
+// No triangulation needed — Canvas 2D fills concave polygons perfectly.
+
+function ZoneOverlays({
+  territories,
+  countryFeatures = [],
+}: {
+  territories:     Territory[]
+  countryFeatures: GeoJSON.Feature[]
+}) {
+  const texture = useMemo(() => {
+    if (territories.length === 0) return null
+
+    // 4096×2048 → 4× more texels than before, eliminates most aliasing
+    const W = 4096, H = 2048
+    const canvas = document.createElement('canvas')
+    canvas.width  = W
+    canvas.height = H
+    const ctx = canvas.getContext('2d')!
+
+    // ── Helper: trace a territory polygon as a canvas path ────────────────────
+    const tracePath = (territory: Territory) => {
+      ctx.beginPath()
+      territory.polygon.forEach(([mx, my], j) => {
+        const [lon, lat] = invMercator(mx, my)
+        const px = (lon + 180) / 360 * W
+        const py = (90  - lat) / 180 * H
+        if (j === 0) ctx.moveTo(px, py)
+        else         ctx.lineTo(px, py)
+      })
+      ctx.closePath()
+    }
+
+    // ── Helper: clip canvas to a set of GeoJSON features ──────────────────────
+    const applyClip = (feats: GeoJSON.Feature[]) => {
+      ctx.beginPath()
+      for (const feat of feats) {
+        const geo = feat.geometry
+        if (!geo) continue
+        const rings: number[][][] =
+          geo.type === 'Polygon'      ? geo.coordinates as number[][][] :
+          geo.type === 'MultiPolygon' ? (geo.coordinates as number[][][][]).flat() :
+          []
+        for (const ring of rings) {
+          ring.forEach(([lon, lat], j) => {
+            const px = (lon + 180) / 360 * W
+            const py = (90  - lat) / 180 * H
+            if (j === 0) ctx.moveTo(px, py)
+            else         ctx.lineTo(px, py)
+          })
+          ctx.closePath()
+        }
+      }
+      ctx.clip('evenodd')
+    }
+
+    // ── Build a lookup: bonus-group key → GeoJSON features for that country ───
+    // territory.bonus_group is "bonus-<isoNumeric>" from generateZonesFromCities
+    const featsByGroup = new Map<string, GeoJSON.Feature[]>()
+    for (const feat of countryFeatures) {
+      const iso = typeof feat.id === 'string' ? parseInt(feat.id) : (feat.id as number ?? 0)
+      const key = `bonus-${iso}`
+      if (!featsByGroup.has(key)) featsByGroup.set(key, [])
+      featsByGroup.get(key)!.push(feat)
+    }
+
+    // ── Group territories by country, preserving global index for palette ─────
+    const byCountry = new Map<string, { territory: Territory; gi: number }[]>()
+    territories.forEach((t, gi) => {
+      const key = t.bonus_group ?? '__all__'
+      if (!byCountry.has(key)) byCountry.set(key, [])
+      byCountry.get(key)!.push({ territory: t, gi })
+    })
+
+    // ── Render each country's zones within its own clipping region ────────────
+    for (const [key, entries] of byCountry) {
+      const feats = featsByGroup.get(key) ?? (key === '__all__' ? countryFeatures : [])
+
+      ctx.save()
+      if (feats.length > 0) applyClip(feats)
+
+      // Pass 1: fills
+      entries.forEach(({ territory, gi }) => {
+        if (!territory.polygon || territory.polygon.length < 3) return
+        tracePath(territory)
+        ctx.fillStyle = ZONE_PALETTE[gi % ZONE_PALETTE.length] + 'CC'
+        ctx.fill()
+      })
+
+      // Pass 2: subtle glow
+      ctx.save()
+      ctx.filter = 'blur(3px)'
+      entries.forEach(({ territory }) => {
+        if (!territory.polygon || territory.polygon.length < 3) return
+        tracePath(territory)
+        ctx.strokeStyle = 'rgba(255, 210, 100, 0.25)'
+        ctx.lineWidth   = 7
+        ctx.lineJoin    = 'round'
+        ctx.stroke()
+      })
+      ctx.restore()
+
+      // Pass 3: crisp gold border
+      entries.forEach(({ territory }) => {
+        if (!territory.polygon || territory.polygon.length < 3) return
+        tracePath(territory)
+        ctx.strokeStyle = 'rgba(210, 165, 55, 0.90)'
+        ctx.lineWidth   = 2.5
+        ctx.lineJoin    = 'round'
+        ctx.stroke()
+      })
+
+      ctx.restore()
+    }
+
+    const tex = new THREE.CanvasTexture(canvas)
+    // Anisotropic filtering eliminates blurring when the sphere is viewed at
+    // a shallow angle (the main cause of the "fuzzy" appearance)
+    tex.anisotropy  = 16
+    tex.needsUpdate = true
+    return tex
+  }, [territories, countryFeatures])
+
+  useEffect(() => {
+    return () => { texture?.dispose() }
+  }, [texture])
+
+  if (!texture) return null
+
+  return (
+    <mesh>
+      {/* Slightly outside the globe (r=1.0) so zones render on top */}
+      <sphereGeometry args={[1.002, 256, 256]} />
+      <meshBasicMaterial
+        map={texture}
+        transparent
+        depthWrite={false}
+      />
+    </mesh>
+  )
 }
 
 // ─── Atmosphere Shader ────────────────────────────────────────────────────────
@@ -70,15 +236,27 @@ const atmosphereFragmentShader = /* glsl */`
 
 function EarthMesh() {
   const texture = useTexture('/earth.jpg')
-  // Apply a subtle color tint to make the earth feel richer, not washed-out parchment
+
+  // Clone the texture for bump mapping so we can set it to linear color space
+  // (brightness in the satellite image approximates terrain elevation well enough:
+  //  bright snow/rock caps = raised, dark oceans = sunken)
+  const bumpTex = useMemo(() => {
+    const t = texture.clone()
+    t.colorSpace = THREE.NoColorSpace
+    t.needsUpdate = true
+    return t
+  }, [texture])
+
   return (
     <mesh>
-      <sphereGeometry args={[1, 96, 96]} />
+      <sphereGeometry args={[1, 128, 128]} />
       <meshStandardMaterial
         map={texture}
+        bumpMap={bumpTex}
+        bumpScale={0.05}
         roughness={0.85}
         metalness={0.05}
-        color="#c8d4e8"   // very slight blue-cool tint to complement atmosphere
+        color="#c8d4e8"
       />
     </mesh>
   )
@@ -411,18 +589,15 @@ function CityMarkers({ markers }: { markers: MarkerDef[] }) {
         <Html
           position={positions[hoveredIdx]}
           center={false}
-          distanceFactor={3.5}
+          distanceFactor={6}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >
-          <div
-            className="flex flex-col items-center"
-            style={{ 
-              gap: '4px',
-              transform: 'translate(-50%, 10px)', // Offset below the marker
-            }}
-          >
-            <div className="bg-crusader-void/90 border border-crusader-gold/30 rounded-md px-2 py-1 backdrop-blur-sm shadow-2xl">
-              <span className="font-cinzel text-[10px] text-white whitespace-nowrap uppercase tracking-wider">
+          <div style={{ transform: 'translate(-50%, 8px)' }}>
+            <div
+              className="border border-crusader-gold/25 rounded px-1.5 py-0.5 backdrop-blur-sm"
+              style={{ background: 'rgba(5,4,2,0.82)' }}
+            >
+              <span className="font-cinzel text-[8px] text-crusader-gold/90 whitespace-nowrap tracking-widest uppercase">
                 {markers[hoveredIdx].label}
               </span>
             </div>
@@ -445,6 +620,10 @@ export interface EarthGlobeProps {
   onCountrySelect?:      (id: number, name: string, feature: GeoJSON.Feature) => void
   onZoomChange?:         (distance: number) => void
   markers?:              MarkerDef[]
+  /** When provided, renders coloured Voronoi zone meshes on the globe surface */
+  territories?:          Territory[]
+  /** GeoJSON features of the selected countries — used to clip zone rendering */
+  countryFeatures?:      GeoJSON.Feature[]
   focusLatLon?:          [number, number]
   className?:            string
 }
@@ -459,6 +638,8 @@ export default function EarthGlobe({
   onCountrySelect,
   onZoomChange,
   markers        = [],
+  territories    = [],
+  countryFeatures = [],
   focusLatLon,
   className      = 'w-full h-full',
 }: EarthGlobeProps) {
@@ -467,16 +648,27 @@ export default function EarthGlobe({
   const [hoveredContinent, setHovCont]  = useState<ContinentId | null>(null)
   const [selectedContinent, setSelCont] = useState<ContinentId | null>(null)
 
+  const [hiresData, setHiresData] = useState<Topology | null>(null)
+
   useEffect(() => {
+    // Load 50m data immediately for fast initial render
     fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json')
       .then((r) => r.json())
-      .then((data: Topology) => setWorldData(data))
+      .then((data: Topology) => {
+        setWorldData(data)
+        // Then load 10m in background for sharper borders at close zoom
+        return fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-10m.json')
+      })
+      .then((r) => r.json())
+      .then((data: Topology) => setHiresData(data))
       .catch(console.error)
   }, [])
 
+  const activeData = hiresData ?? worldData
+
   const { features, featureMap } = useMemo(() => {
-    if (!worldData) return { features: [], featureMap: new Map() }
-    const countries = feature(worldData, worldData.objects.countries as GeometryCollection)
+    if (!activeData) return { features: [], featureMap: new Map() }
+    const countries = feature(activeData, activeData.objects.countries as GeometryCollection)
     const feats = countries.features
     const map = new Map<number, GeoJSON.Feature>()
     feats.forEach((f) => {
@@ -484,7 +676,7 @@ export default function EarthGlobe({
       map.set(id, f)
     })
     return { features: feats, featureMap: map }
-  }, [worldData])
+  }, [activeData])
 
   const handleHoverChange = useCallback((id: number | null, name: string | null, continent: ContinentId | null) => {
     setHovered(id !== null ? { id, name: name ?? '', continent } : null)
@@ -513,7 +705,7 @@ export default function EarthGlobe({
   return (
     <div className={`relative ${className}`}>
       <Canvas
-        camera={{ position: initCamPos, fov: 45, near: 0.1, far: 1000 }}
+        camera={{ position: initCamPos, fov: 45, near: 0.02, far: 1000 }}
         gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
         style={{ background: 'transparent' }}
       >
@@ -555,7 +747,7 @@ export default function EarthGlobe({
           enablePan={false}
           enableZoom={interactive}
           enableRotate={interactive}
-          minDistance={1.3}
+          minDistance={1.05}
           maxDistance={5.0}
           autoRotate={autoRotate}
           autoRotateSpeed={0.4}
@@ -565,6 +757,11 @@ export default function EarthGlobe({
         />
 
         {onZoomChange && <ZoomTracker onZoomChange={onZoomChange} />}
+
+        {/* Zone overlays: coloured Voronoi cells projected onto the sphere */}
+        {territories.length > 0 && (
+          <ZoneOverlays territories={territories} countryFeatures={countryFeatures} />
+        )}
 
         {markers.length > 0 && <CityMarkers markers={markers} />}
       </Canvas>

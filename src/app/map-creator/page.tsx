@@ -13,7 +13,7 @@ import {
 } from '@/lib/geoData'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
-import type { BonusGroup } from '@/types'
+import type { BonusGroup, Territory } from '@/types'
 import {
   Globe, Map as MapIcon, Layers,
   Save, CheckCircle, Plus, Sword,
@@ -37,8 +37,8 @@ const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), {
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type MapMode  = 'continent' | 'country' | 'province'
-type AppView  = 'globe' | 'preview'
+type MapMode = 'continent' | 'country' | 'province'
+type AppView = 'globe' | 'preview'
 
 interface MapMeta {
   name: string
@@ -48,11 +48,11 @@ interface MapMeta {
 // ─── Zoom Thresholds ──────────────────────────────────────────────────────────
 
 const CONTINENT_ZOOM = 3.8
-const COUNTRY_ZOOM   = 2.5
+const COUNTRY_ZOOM = 2.5
 
 function getModeFromZoom(d: number): MapMode {
   if (d >= CONTINENT_ZOOM) return 'continent'
-  if (d >= COUNTRY_ZOOM)   return 'country'
+  if (d >= COUNTRY_ZOOM) return 'country'
   return 'province'
 }
 
@@ -64,8 +64,8 @@ function computeRegionBounds(features: GeoJSON.Feature[]) {
     const geo = feat.geometry
     if (!geo) continue
     const coords: number[][][] =
-      geo.type === 'Polygon'      ? geo.coordinates as number[][][] :
-      geo.type === 'MultiPolygon' ? (geo.coordinates as number[][][][]).flat() : []
+      geo.type === 'Polygon' ? geo.coordinates as number[][][] :
+        geo.type === 'MultiPolygon' ? (geo.coordinates as number[][][][]).flat() : []
     for (const ring of coords)
       for (const [lon, lat] of ring) {
         minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat)
@@ -93,9 +93,9 @@ function Divider() {
 
 function ModeIndicator({ mode }: { mode: MapMode }) {
   const labels: Record<MapMode, { label: string; hint: string; icon: typeof Globe }> = {
-    continent: { label: 'Continent Mode',   hint: 'Click to select entire continents',     icon: Globe   },
-    country:   { label: 'Country Mode',     hint: 'Click countries to add them to the map', icon: MapIcon },
-    province:  { label: 'Fine Detail Mode', hint: 'Click individual territories',           icon: Layers },
+    continent: { label: 'Continent Mode', hint: 'Click to select entire continents', icon: Globe },
+    country: { label: 'Country Mode', hint: 'Click countries to add them to the map', icon: MapIcon },
+    province: { label: 'Fine Detail Mode', hint: 'Click individual territories', icon: Layers },
   }
   const { label, hint, icon: Icon } = labels[mode]
   return (
@@ -120,19 +120,128 @@ function ZoomGuide({ mode }: { mode: MapMode }) {
         style={{ background: 'rgba(8,6,4,0.65)' }}
       >
         {([
-          { m: 'continent' as MapMode, label: 'Continents', Icon: ZoomOut  },
-          { m: 'country'   as MapMode, label: 'Countries',  Icon: Globe    },
-          { m: 'province'  as MapMode, label: 'Provinces',  Icon: ZoomIn   },
+          { m: 'continent' as MapMode, label: 'Continents', Icon: ZoomOut },
+          { m: 'country' as MapMode, label: 'Countries', Icon: Globe },
+          { m: 'province' as MapMode, label: 'Provinces', Icon: ZoomIn },
         ]).map(({ m, label, Icon }) => (
-          <div key={m} className={`flex items-center gap-2 text-[10px] font-cinzel tracking-wide ${
-            mode === m ? 'text-crusader-gold' : 'text-crusader-gold/25'
-          }`}>
+          <div key={m} className={`flex items-center gap-2 text-[10px] font-cinzel tracking-wide ${mode === m ? 'text-crusader-gold' : 'text-crusader-gold/25'
+            }`}>
             <Icon size={10} />
             <span>{label}</span>
           </div>
         ))}
       </div>
     </div>
+  )
+}
+
+// ─── Zone Cartogram ───────────────────────────────────────────────────────────
+// Renders Voronoi territory polygons as a 2D flat map — Voronoi cells are
+// clipped to country outlines and colored by country (bonus group).
+
+const CARTOGRAM_PALETTE = [
+  '#C94040', '#3A7EC5', '#2E8B57', '#D4A843', '#7B4C96',
+  '#2E8B8B', '#C96C30', '#8C3E8C', '#4C8C4C', '#3E6B8C',
+  '#8C5A3E', '#5A3E8C', '#3E8C6B', '#8C3E5A', '#6B8C3E',
+  '#8C7A3E', '#3E5A8C', '#8C4C3E', '#5A8C3E', '#8C3E6B',
+]
+
+function ZoneCartogram({
+  territories,
+  bonusGroups,
+}: {
+  territories: Territory[]
+  bonusGroups: BonusGroup[]
+}) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+
+  const viewBox = useMemo(() => {
+    if (!territories.length) return '0 0 800 400'
+    const allX = territories.flatMap((t) => t.polygon?.map(([x]) => x) ?? [])
+    const allY = territories.flatMap((t) => t.polygon?.map(([, y]) => y) ?? [])
+    if (!allX.length) return '0 0 800 400'
+    const pad = 12
+    const minX = Math.min(...allX) - pad
+    const minY = Math.min(...allY) - pad
+    const w    = Math.max(...allX) - minX + pad
+    const h    = Math.max(...allY) - minY + pad
+    return `${minX} ${minY} ${w} ${h}`
+  }, [territories])
+
+  if (!territories.length) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <p className="text-crusader-gold/30 font-cinzel text-sm">Generating zones…</p>
+      </div>
+    )
+  }
+
+  return (
+    <svg
+      viewBox={viewBox}
+      className="w-full h-full"
+      preserveAspectRatio="xMidYMid meet"
+      style={{ background: '#080810' }}
+    >
+      {/* Subtle grid-line water texture */}
+      <defs>
+        <pattern id="water-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(100,140,200,0.06)" strokeWidth="0.5"/>
+        </pattern>
+      </defs>
+      <rect x="-9999" y="-9999" width="99999" height="99999" fill="url(#water-grid)" />
+
+      {territories.map((t, i) => {
+        if (!t.polygon || t.polygon.length < 3) return null
+        const isHovered = t.id === hoveredId
+        const color = CARTOGRAM_PALETTE[i % CARTOGRAM_PALETTE.length]
+        const d = t.polygon
+          .map(([x, y], j) => `${j === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
+          .join(' ') + ' Z'
+        const [cx, cy] = t.seed
+
+        return (
+          <g
+            key={t.id}
+            onMouseEnter={() => setHoveredId(t.id)}
+            onMouseLeave={() => setHoveredId(null)}
+          >
+            <path
+              d={d}
+              fill={color}
+              fillOpacity={isHovered ? 0.95 : 0.78}
+              stroke={isHovered ? '#F0D88A' : '#C9A84C'}
+              strokeWidth={isHovered ? 1.2 : 0.5}
+              strokeLinejoin="round"
+            />
+            {/* Highlight glow on hover */}
+            {isHovered && (
+              <path
+                d={d}
+                fill="none"
+                stroke="#F0D88A"
+                strokeWidth={3}
+                strokeLinejoin="round"
+                opacity={0.25}
+                style={{ filter: 'blur(2px)' }}
+              />
+            )}
+            {/* City name label */}
+            <text
+              x={cx} y={cy}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={5}
+              fontFamily="Cinzel, serif"
+              fill="rgba(255,255,255,0.80)"
+              style={{ pointerEvents: 'none', userSelect: 'none' }}
+            >
+              {t.name}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
   )
 }
 
@@ -146,32 +255,34 @@ export default function MapCreatorPage() {
   const [view, setView] = useState<AppView>('globe')
 
   // ── Globe interaction ─────────────────────────────────────────────────────────
-  const [zoomDistance,    setZoomDistance]    = useState(2.8)
-  const [selCountryIds,   setSelCountryIds]   = useState<number[]>([])
+  const [zoomDistance, setZoomDistance] = useState(2.8)
+  const [selCountryIds, setSelCountryIds] = useState<number[]>([])
   const [selCountryFeats, setSelCountryFeats] = useState<GeoJSON.Feature[]>([])
-  const [selContinents,   setSelContinents]   = useState<ContinentId[]>([])
+  const [selContinents, setSelContinents] = useState<ContinentId[]>([])
 
   // ── Map metadata ──────────────────────────────────────────────────────────────
-  const [meta,       setMeta]       = useState<MapMeta>({ name: '', desc: '' })
-  const [zoneCount,  setZoneCount]  = useState(25)
+  const [meta, setMeta] = useState<MapMeta>({ name: '', desc: '' })
+  const [zoneCount, setZoneCount] = useState(25)
 
   // ── Generated output ──────────────────────────────────────────────────────────
-  const [generatedCities, setGeneratedCities] = useState<CityFull[]>([])
-  const [bonusGroups,     setBonusGroups]     = useState<BonusGroup[]>([])
-  const [generating,  setGenerating]  = useState(false)
-  const [saving,      setSaving]      = useState(false)
-  const [savedId,     setSavedId]     = useState<string | null>(null)
-  const [saveError,   setSaveError]   = useState<string | null>(null)
-  const [editingId,   setEditingId]   = useState<string | null>(null)
-  const [editName,    setEditName]    = useState('')
+  const [generatedCities,      setGeneratedCities]      = useState<CityFull[]>([])
+  const [generatedTerritories, setGeneratedTerritories] = useState<Territory[]>([])
+  const [bonusGroups,          setBonusGroups]          = useState<BonusGroup[]>([])
+  const [previewTab,           setPreviewTab]           = useState<'cartogram' | 'globe'>('globe')
+  const [generating, setGenerating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [savedId, setSavedId] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
 
-  const mapMode      = getModeFromZoom(zoomDistance)
+  const mapMode = getModeFromZoom(zoomDistance)
   const globeSelMode = mapMode === 'continent' ? 'continent' : 'multi-country'
 
   const markers: MarkerDef[] = useMemo(() => generatedCities.map((c, i) => ({
-    id:    `city-${i}`,
-    lat:   c.lat,
-    lon:   c.lon,
+    id: `city-${i}`,
+    lat: c.lat,
+    lon: c.lon,
     label: c.name,
   })), [generatedCities])
 
@@ -184,7 +295,7 @@ export default function MapCreatorPage() {
     const already = selContinents.includes(continent)
     if (already) {
       setSelContinents((p) => p.filter((c) => c !== continent))
-      setSelCountryIds((p)  => p.filter((id) => !countryIds.includes(id)))
+      setSelCountryIds((p) => p.filter((id) => !countryIds.includes(id)))
       setSelCountryFeats((p) => p.filter((f) => {
         const fid = typeof f.id === 'string' ? parseInt(f.id) : (f.id as number)
         return !countryIds.includes(fid)
@@ -223,38 +334,43 @@ export default function MapCreatorPage() {
 
   const clearAll = useCallback(() => {
     setSelCountryIds([]); setSelCountryFeats([]); setSelContinents([])
-    setGeneratedCities([]); setBonusGroups([]); setSavedId(null)
+    setGeneratedCities([]); setGeneratedTerritories([]); setBonusGroups([]); setSavedId(null)
   }, [])
 
   // ── Auto-generate zones when selection or count changes ─────────────────────
   useEffect(() => {
     if (selCountryIds.length === 0) {
       setGeneratedCities([])
+      setGeneratedTerritories([])
       setBonusGroups([])
       return
     }
 
-    // Get top-N most-populated cities from the selected countries
+    // Get all cities for selected countries sorted by population
     const allCities = getCitiesForCountries(selCountryIds)
     const topCities = allCities.slice(0, Math.max(2, zoneCount))
-
-    // Build bonus groups per country
-    const countryMap = new Map<number, CityFull[]>()
-    for (const c of topCities) {
-      if (!countryMap.has(c.country)) countryMap.set(c.country, [])
-      countryMap.get(c.country)!.push(c)
-    }
-    const namedGroups: BonusGroup[] = Array.from(countryMap.entries()).map(([iso, cities]) => ({
-      id:            `bonus-${iso}`,
-      name:          getCountryName(iso) || `Country ${iso}`,
-      territory_ids: cities.map((_, i) => `city-${i}`),
-      bonus_armies:  Math.max(2, Math.round(cities.length / 3)),
-    }))
-
     setGeneratedCities(topCities)
+
+    if (selCountryFeats.length === 0) {
+      setGeneratedTerritories([])
+      setBonusGroups([])
+      setSavedId(null)
+      return
+    }
+
+    // Generate Voronoi zones clipped to country boundaries
+    const result = generateZonesFromCities(allCities, selCountryFeats, zoneCount)
+
+    // Fix bonus group names (generateZonesFromCities uses placeholder names)
+    const namedGroups: BonusGroup[] = result.bonusGroups.map((bg) => {
+      const iso = parseInt(bg.id.replace('bonus-', ''))
+      return { ...bg, name: getCountryName(iso) || bg.name }
+    })
+
+    setGeneratedTerritories(result.territories)
     setBonusGroups(namedGroups)
     setSavedId(null)
-  }, [selCountryIds, zoneCount])
+  }, [selCountryIds, selCountryFeats, zoneCount])
 
   // ── Preview toggle ────────────────────────────────────────────────────────────
   function handleGenerate() {
@@ -267,7 +383,7 @@ export default function MapCreatorPage() {
   async function handleSave() {
     setSaveError(null)
     if (!player) { setSaveError('You must be signed in to save a map.'); return }
-    if (generatedCities.length === 0) { setSaveError('Generate zones first.'); return }
+    if (generatedTerritories.length === 0) { setSaveError('Generate zones first.'); return }
     if (!meta.name.trim()) { setSaveError('Please enter a map name.'); return }
     setSaving(true)
     try {
@@ -278,24 +394,18 @@ export default function MapCreatorPage() {
       const regionName = selContinents.length > 0
         ? selContinents.map((c) => CONTINENT_INFO[c].label).join(' + ')
         : selCountryIds.slice(0, 5).map(getCountryName).filter(Boolean).join(', ') +
-          (selCountryIds.length > 5 ? ` +${selCountryIds.length - 5} more` : '')
+        (selCountryIds.length > 5 ? ` +${selCountryIds.length - 5} more` : '')
 
       const sb = getSupabaseClient()
       const { data, error } = await sb.from('battle_maps').insert({
-        name:          meta.name.trim(),
-        description:   meta.desc.trim() || null,
-        author_id:     player.id,
-        region_name:   regionName || 'Custom Region',
+        name: meta.name.trim(),
+        description: meta.desc.trim() || null,
+        author_id: player.id,
+        region_name: regionName || 'Custom Region',
         region_bounds: bounds,
-        territories:   generatedCities.map((c, i) => ({
-          id:           `city-${i}`,
-          name:         c.name,
-          polygon:      [] as [number, number][],
-          seed:         [c.lon, c.lat] as [number, number],
-          adjacent_ids: [] as string[],
-        })),
-        bonus_groups:  bonusGroups,
-        is_public:     true,
+        territories: generatedTerritories,
+        bonus_groups: bonusGroups,
+        is_public: true,
       }).select('id').single()
 
       if (error) throw error
@@ -365,6 +475,8 @@ export default function MapCreatorPage() {
               onMultiCountryToggle={handleCountryToggle}
               onZoomChange={setZoomDistance}
               markers={markers}
+              territories={generatedTerritories}
+              countryFeatures={selCountryFeats}
               className="absolute inset-0 w-full h-full"
             />
             <ModeIndicator mode={mapMode} />
@@ -480,7 +592,7 @@ export default function MapCreatorPage() {
                 <span className="text-sm font-cinzel font-bold text-crusader-gold">{zoneCount}</span>
               </div>
               <input
-                type="range" min={2} max={200} value={zoneCount}
+                type="range" min={2} max={50} value={zoneCount}
                 onChange={(e) => setZoneCount(Number(e.target.value))}
                 className="w-full accent-crusader-gold cursor-pointer"
               />
@@ -491,7 +603,7 @@ export default function MapCreatorPage() {
                     ? `${getCitiesForCountries(selCountryIds).length} cities available`
                     : 'select regions first'}
                 </span>
-                <span>200 max</span>
+                <span>50 max</span>
               </div>
               {selCountryIds.length > 0 && zoneCount > getCitiesForCountries(selCountryIds).length && (
                 <p className="text-[10px] text-amber-400/70 font-cinzel mt-1.5 text-center">
@@ -526,31 +638,59 @@ export default function MapCreatorPage() {
 
 
 
-  const canSave = !!player && meta.name.trim().length > 0 && generatedCities.length > 0
+  const canSave = !!player && meta.name.trim().length > 0 && generatedTerritories.length > 0
 
   return (
     <div className="h-screen bg-crusader-void flex flex-col overflow-hidden">
       <main className="flex-1 flex flex-row overflow-hidden pt-20">
 
-        {/* Globe with zone markers */}
-        <div className="flex-1 relative overflow-hidden">
-          <EarthGlobe
-            interactive
-            autoRotate={false}
-            selectionMode="none"
-            markers={markers}
-            className="absolute inset-0 w-full h-full"
-          />
+        {/* Main view: Zone Cartogram or Globe */}
+        <div className="flex-1 relative overflow-hidden bg-crusader-void">
+
+          {previewTab === 'cartogram' ? (
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <ZoneCartogram territories={generatedTerritories} bonusGroups={bonusGroups} />
+            </div>
+          ) : (
+            <EarthGlobe
+              interactive
+              autoRotate={false}
+              selectionMode="none"
+              markers={markers}
+              territories={generatedTerritories}
+              countryFeatures={selCountryFeats}
+              className="absolute inset-0 w-full h-full"
+            />
+          )}
+
+          {/* View toggle */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex">
+            {(['cartogram', 'globe'] as const).map((tab, i) => (
+              <button
+                key={tab}
+                onClick={() => setPreviewTab(tab)}
+                className={`px-4 py-1.5 text-[11px] font-cinzel tracking-wider border border-crusader-gold/25 backdrop-blur-md transition-colors ${
+                  i === 0 ? 'rounded-l-full' : 'rounded-r-full border-l-0'
+                } ${
+                  previewTab === tab
+                    ? 'bg-crusader-gold/20 text-crusader-gold'
+                    : 'bg-crusader-void/70 text-crusader-gold/35 hover:text-crusader-gold/65'
+                }`}
+              >
+                {tab === 'cartogram' ? 'Zone Map' : 'Globe'}
+              </button>
+            ))}
+          </div>
 
           {/* Zone count badge */}
-          <div className="absolute top-5 left-1/2 -translate-x-1/2 pointer-events-none">
+          <div className="absolute top-4 right-5 pointer-events-none">
             <div
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-teal-500/30 backdrop-blur-md"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-teal-500/30 backdrop-blur-md"
               style={{ background: 'rgba(8,6,4,0.70)' }}
             >
-              <div className="w-2 h-2 rounded-full bg-teal-400" style={{ boxShadow: '0 0 6px rgba(77,217,172,0.8)' }} />
-              <span className="font-cinzel text-xs text-teal-300 tracking-widest">
-                {generatedCities.length} Deployable Zones
+              <div className="w-1.5 h-1.5 rounded-full bg-teal-400" style={{ boxShadow: '0 0 6px rgba(77,217,172,0.8)' }} />
+              <span className="font-cinzel text-[11px] text-teal-300 tracking-widest">
+                {generatedTerritories.length} Zones
               </span>
             </div>
           </div>
