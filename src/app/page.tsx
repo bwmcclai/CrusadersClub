@@ -1,7 +1,15 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { LogOut, User, Map, Users, Sword, Trophy } from 'lucide-react'
+
+import { getSupabaseClient } from '@/lib/supabase'
+import { useAppStore } from '@/lib/store'
+import { getTierForLevel } from '@/lib/xp'
+import FlagAvatar from '@/components/ui/FlagAvatar'
 import Navbar from '@/components/layout/Navbar'
 
 export default function LandingPage() {
