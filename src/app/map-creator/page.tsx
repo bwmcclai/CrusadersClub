@@ -3,7 +3,6 @@ import dynamic from 'next/dynamic'
 import { useState, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import Navbar from '@/components/layout/Navbar'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Card from '@/components/ui/Card'
@@ -377,7 +376,6 @@ export default function MapCreatorPage() {
 
   return (
     <div className="min-h-screen bg-crusader-void flex flex-col">
-      <Navbar />
 
       <main className="flex-1 pt-16 flex flex-col">
 

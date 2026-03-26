@@ -53,10 +53,7 @@ export default function Navbar() {
   }
 
   return (
-    <motion.nav
-      initial={{ y: -100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.8, ease: 'easeOut' }}
+    <nav
       className="fixed top-0 left-0 right-0 z-40 diegetic-container"
     >
       <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-crusader-gold/80 to-transparent" />
@@ -275,6 +272,6 @@ export default function Navbar() {
           )}
         </motion.div>
       )}
-    </motion.nav>
+    </nav>
   )
 }

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import AuthProvider from '@/components/AuthProvider'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import Navbar from '@/components/layout/Navbar'
 
 export const metadata: Metadata = {
   title:       'Crusaders Club — Command the World',
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className="bg-crusader-void text-crusader-gold-light antialiased min-h-screen">
         <AuthProvider initialUser={user} initialPlayer={initialPlayer}>
+          <Navbar />
           {children}
         </AuthProvider>
       </body>

@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import Navbar from '@/components/layout/Navbar'
 import { getSupabaseClient } from '@/lib/supabase'
 import TerritoryMap from '@/components/three/TerritoryMap'
 import Button from '@/components/ui/Button'
@@ -57,7 +56,6 @@ export default function MapDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-crusader-void flex items-center justify-center">
-        <Navbar />
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 rounded-full border-2 border-crusader-gold/30 border-t-crusader-gold animate-spin" />
           <p className="font-cinzel text-crusader-gold/50 text-sm tracking-widest">Loading Map…</p>
@@ -69,7 +67,6 @@ export default function MapDetailPage() {
   if (!map) {
     return (
       <div className="min-h-screen bg-crusader-void flex flex-col items-center justify-center gap-6">
-        <Navbar />
         <Map size={48} className="text-crusader-gold/20" />
         <p className="font-cinzel text-xl text-crusader-gold/40">Map not found</p>
         <Link href="/maps">
@@ -86,7 +83,6 @@ export default function MapDetailPage() {
 
   return (
     <div className="min-h-screen bg-crusader-void text-crusader-parchment">
-      <Navbar />
 
       {/* Subtle background */}
       <div className="fixed inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c9a84c' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }} />

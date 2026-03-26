@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Navbar from '@/components/layout/Navbar'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
@@ -417,7 +416,6 @@ export default function LobbyPage() {
 
   return (
     <div className="min-h-screen bg-crusader-void">
-      <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-16">
         {/* ── Header ──────────────────────────────────────────────────────── */}
