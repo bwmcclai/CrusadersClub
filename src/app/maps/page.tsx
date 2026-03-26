@@ -310,29 +310,57 @@ export default function MapsPage() {
   const [maps, setMaps]           = useState<MapRecord[]>([])
   const [filtered, setFiltered]   = useState<MapRecord[]>([])
   const [loading, setLoading]     = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [search, setSearch]       = useState('')
   const [selectedMap, setSelectedMap] = useState<MapRecord | null>(null)
+  const [page, setPage]           = useState(0)
+  const [hasMore, setHasMore]     = useState(true)
+
+  const PAGE_SIZE = 12
+
+  async function fetchMaps(pageNumber: number, isInitial: boolean = false) {
+    if (isInitial) setLoading(true)
+    else setLoadingMore(true)
+
+    try {
+      const from = pageNumber * PAGE_SIZE
+      const to = from + PAGE_SIZE - 1
+
+      const { data, error } = await getSupabaseClient()
+        .from('battle_maps')
+        .select('id, name, description, region_name, territories, bonus_groups, play_count, created_at, author_id, players(username)')
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) throw error
+
+      if (data) {
+        const newMaps = data as unknown as MapRecord[]
+        if (isInitial) {
+          setMaps(newMaps)
+        } else {
+          setMaps((prev) => [...prev, ...newMaps])
+        }
+        setHasMore(newMaps.length === PAGE_SIZE)
+      }
+    } catch (e) {
+      console.error('Failed to fetch maps:', e)
+    } finally {
+      if (isInitial) setLoading(false)
+      else setLoadingMore(false)
+    }
+  }
 
   useEffect(() => {
-    async function fetchMaps() {
-      try {
-        const { data } = await getSupabaseClient()
-          .from('battle_maps')
-          .select('id, name, description, region_name, region_bounds, territories, bonus_groups, play_count, created_at, author_id, players(username)')
-          .eq('is_public', true)
-          .order('created_at', { ascending: false })
-        if (data) {
-          setMaps(data as unknown as MapRecord[])
-          setFiltered(data as unknown as MapRecord[])
-        }
-      } catch (e) {
-        console.error('Failed to fetch maps:', e)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchMaps()
+    fetchMaps(0, true)
   }, [])
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1
+    setPage(nextPage)
+    fetchMaps(nextPage)
+  }
 
   // Search filter
   useEffect(() => {
@@ -439,11 +467,26 @@ export default function MapsPage() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {filtered.map((map, index) => (
-                <MapCard key={map.id} map={map} index={index} onClick={() => setSelectedMap(map)} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {filtered.map((map, index) => (
+                  <MapCard key={map.id} map={map} index={index} onClick={() => setSelectedMap(map)} />
+                ))}
+              </div>
+
+              {hasMore && !search && (
+                <div className="mt-12 flex justify-center">
+                  <Button
+                    variant="ghost"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="font-cinzel tracking-widest px-10 py-4"
+                  >
+                    {loadingMore ? 'Forging more maps…' : 'Forge More Maps'}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
