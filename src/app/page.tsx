@@ -26,10 +26,10 @@ export default function LandingPage() {
   ]
 
   const carouselItems = [
-    { id: 1, title: 'Global Warfare',       subtitle: 'DOMINATE THE WORLD',    image: '/showcase/carousel_1.png' },
-    { id: 2, title: 'Tactical Combat',      subtitle: 'FAST PACED STRATEGY',   image: '/showcase/carousel_2.png' },
-    { id: 3, title: 'Command Your Forces',  subtitle: 'LEAD TO GLORY',         image: '/showcase/carousel_3.png' },
-  ]
+    { id: 1, title: 'Global Warfare', subtitle: 'Lead Your Crusade', image: '/showcase/carousel_1.png' }]
+  //   { id: 2, title: 'Tactical Combat',      subtitle: 'FAST PACED STRATEGY',   image: '/showcase/carousel_2.png' },
+  //   { id: 3, title: 'Command Your Forces',  subtitle: 'LEAD TO GLORY',         image: '/showcase/carousel_3.png' },
+  // ]
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -144,11 +144,10 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => setActiveSlide(i)}
-                  className={`w-2 transition-all duration-500 rounded-full ${
-                    activeSlide === i
-                      ? 'h-2 bg-crusader-gold shadow-[0_0_10px_rgba(201,168,76,1)]'
-                      : 'h-2 bg-white/20 hover:bg-white/60'
-                  }`}
+                  className={`w-2 transition-all duration-500 rounded-full ${activeSlide === i
+                    ? 'h-2 bg-crusader-gold shadow-[0_0_10px_rgba(201,168,76,1)]'
+                    : 'h-2 bg-white/20 hover:bg-white/60'
+                    }`}
                 />
               ))}
             </div>

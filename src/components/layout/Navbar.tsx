@@ -138,7 +138,7 @@ export default function Navbar() {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.95 }}
                           transition={{ duration: 0.15 }}
-                          className="absolute right-0 top-full mt-2 w-48 glass rounded-xl border border-crusader-gold/20 overflow-hidden shadow-glow-gold"
+                          className="absolute right-0 top-full mt-2 w-48 glass rounded-xl border border-crusader-gold/20 overflow-hidden shadow-glow-gold z-[100]"
                         >
                           <Link
                             href="/profile"
