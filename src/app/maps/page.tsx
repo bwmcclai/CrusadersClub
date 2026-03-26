@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getSupabaseClient } from '@/lib/supabase'
+import { useAppStore } from '@/lib/store'
+import { cn } from '@/lib/utils'
 import TerritoryMap from '@/components/three/TerritoryMap'
 import Button from '@/components/ui/Button'
 import { Map, Plus, Globe, Sword, Star, Layers, X, Search, ExternalLink } from 'lucide-react'
@@ -132,7 +134,7 @@ function MapCard({ map, index, onClick }: { map: MapRecord; index: number; onCli
 
 // ─── Map Detail Modal ─────────────────────────────────────────────────────────
 
-function MapModal({ map, onClose }: { map: MapRecord; onClose: () => void }) {
+function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => void; player: any }) {
   const [showGlobe, setShowGlobe] = useState(false)
   const territoryCount = Array.isArray(map.territories) ? map.territories.length : 0
   const bonusGroups = Array.isArray(map.bonus_groups) ? map.bonus_groups : []
@@ -291,8 +293,15 @@ function MapModal({ map, onClose }: { map: MapRecord; onClose: () => void }) {
 
             {/* CTA */}
             <div className="mt-auto pt-2">
-              <Link href={`/lobby?mapId=${map.id}`}>
-                <Button variant="gold" fullWidth icon={<Sword size={15} />} className="font-cinzel font-bold tracking-widest">
+              <Link href={player ? `/lobby?mapId=${map.id}` : '#'}>
+                <Button 
+                  variant="gold" 
+                  fullWidth 
+                  icon={<Sword size={15} />} 
+                  className={cn("font-cinzel font-bold tracking-widest", !player && "opacity-50 cursor-not-allowed")}
+                  disabled={!player}
+                  title={!player ? "Login to play" : undefined}
+                >
                   Play on This Map
                 </Button>
               </Link>
@@ -307,6 +316,7 @@ function MapModal({ map, onClose }: { map: MapRecord; onClose: () => void }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MapsPage() {
+  const player = useAppStore(s => s.player)
   const [maps, setMaps]           = useState<MapRecord[]>([])
   const [filtered, setFiltered]   = useState<MapRecord[]>([])
   const [loading, setLoading]     = useState(true)
@@ -406,8 +416,13 @@ export default function MapsPage() {
               </p>
             </div>
 
-            <Link href="/map-creator" className="flex-shrink-0">
-              <Button variant="gold" icon={<Plus size={16} />} className="font-cinzel font-bold tracking-widest">
+            <Link href={player ? "/map-creator" : "/auth/login"} className="flex-shrink-0">
+              <Button 
+                variant="gold" 
+                icon={<Plus size={16} />} 
+                className="font-cinzel font-bold tracking-widest"
+                title={!player ? "Login to create a map" : undefined}
+              >
                 Create a Map
               </Button>
             </Link>
@@ -494,7 +509,7 @@ export default function MapsPage() {
       {/* ── Map Detail Modal ───────────────────────────────────────────────── */}
       <AnimatePresence>
         {selectedMap && (
-          <MapModal map={selectedMap} onClose={() => setSelectedMap(null)} />
+          <MapModal map={selectedMap} onClose={() => setSelectedMap(null)} player={player} />
         )}
       </AnimatePresence>
     </div>

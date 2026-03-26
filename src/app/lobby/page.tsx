@@ -9,7 +9,8 @@ import Modal from '@/components/ui/Modal'
 import { Sword, Map, Users, Zap, Shield, Clock, Search, Plus, Filter, Bot, Globe, PenTool } from 'lucide-react'
 import { formatMode } from '@/lib/utils'
 import { getSupabaseClient } from '@/lib/supabase'
-import type { LobbyGame, GameMode } from '@/types'
+import { useAppStore } from '@/lib/store'
+import type { Player, LobbyGame, GameMode } from '@/types'
 import TerritoryMap from '@/components/three/TerritoryMap'
 import EarthGlobe from '@/components/three/EarthGlobe'
 
@@ -20,11 +21,13 @@ import EarthGlobe from '@/components/three/EarthGlobe'
 function GameCard({ 
   game, 
   previewTerritories,
-  onPreviewGlobe 
+  onPreviewGlobe,
+  player
 }: { 
   game: LobbyGame, 
   previewTerritories: any[] | null,
-  onPreviewGlobe: (regionName: string) => void
+  onPreviewGlobe: (regionName: string) => void,
+  player: Player | null
 }) {
   const isFull = game.current_players >= game.max_players
   const fill   = game.current_players / game.max_players
@@ -106,16 +109,27 @@ function GameCard({
           </div>
 
           <div className="flex-shrink-0 text-right">
-            <Link href={`/game/${game.id}`}>
+            {player ? (
+              <Link href={`/game/${game.id}`}>
+                <Button
+                  size="sm"
+                  variant={isFull ? 'ghost' : 'gold'}
+                  disabled={isFull && game.status === 'active'}
+                  className="w-24 px-0 justify-center h-8 text-xs"
+                >
+                  {game.status === 'active' ? 'Watch' : isFull ? 'Spectate' : 'Join'}
+                </Button>
+              </Link>
+            ) : (
               <Button
                 size="sm"
-                variant={isFull ? 'ghost' : 'gold'}
-                disabled={isFull && game.status === 'active'}
-                className="w-24 px-0 justify-center h-8 text-xs"
+                variant="outline"
+                className="w-24 px-0 justify-center h-8 text-xs opacity-50 cursor-not-allowed"
+                title="Login to Join"
               >
-                {game.status === 'active' ? 'Watch' : isFull ? 'Spectate' : 'Join'}
+                Join
               </Button>
-            </Link>
+            )}
           </div>
         </div>
       </div>
@@ -322,6 +336,7 @@ function CreateGameModal({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function LobbyPage() {
+  const player = useAppStore(s => s.player)
   const searchParams   = useSearchParams()
   const [search, setSearch]           = useState('')
   const [modeFilter, setModeFilter]   = useState<GameMode | 'all'>('all')
@@ -426,7 +441,13 @@ export default function LobbyPage() {
               {waiting.length} games waiting · {active.length} games in progress
             </p>
           </div>
-          <Button icon={<Plus size={18} />} size="lg" onClick={() => setShowCreate(true)}>
+          <Button 
+            icon={<Plus size={18} />} 
+            size="lg" 
+            onClick={() => setShowCreate(true)}
+            disabled={!player}
+            title={!player ? 'Login to create a game' : undefined}
+          >
             Create Game
           </Button>
         </div>
@@ -475,7 +496,15 @@ export default function LobbyPage() {
                   Open — Join Now
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {waiting.map((g) => <GameCard key={g.id} game={g} previewTerritories={mapPreviewData} onPreviewGlobe={setPreviewRegion} />)}
+                  {waiting.map((g) => (
+                    <GameCard 
+                      key={g.id} 
+                      game={g} 
+                      previewTerritories={mapPreviewData} 
+                      onPreviewGlobe={setPreviewRegion} 
+                      player={player}
+                    />
+                  ))}
                 </div>
               </div>
             )}
@@ -487,7 +516,15 @@ export default function LobbyPage() {
                   In Progress — Spectate
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {active.map((g) => <GameCard key={g.id} game={g} previewTerritories={mapPreviewData} onPreviewGlobe={setPreviewRegion} />)}
+                  {active.map((g) => (
+                    <GameCard 
+                      key={g.id} 
+                      game={g} 
+                      previewTerritories={mapPreviewData} 
+                      onPreviewGlobe={setPreviewRegion} 
+                      player={player}
+                    />
+                  ))}
                 </div>
               </div>
             )}

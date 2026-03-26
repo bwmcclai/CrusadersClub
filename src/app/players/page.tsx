@@ -14,6 +14,7 @@ import FlagAvatar from '@/components/ui/FlagAvatar'
 
 // We will fetch from Supabase on mount
 import { getSupabaseClient } from '@/lib/supabase'
+import { useAppStore } from '@/lib/store'
 
 type DBPlayer = {
   id: string
@@ -37,11 +38,13 @@ type TierFilter = 'all' | string
 function PlayerModal({
   player,
   onClose,
-  allPlayers
+  allPlayers,
+  currentUser
 }: {
   player: DBPlayer | null
   onClose: () => void
-  allPlayers: DBPlayer[]
+  allPlayers: DBPlayer[],
+  currentUser: any
 }) {
   if (!player) return null
   const tier = getTierForLevel(player.level)
@@ -142,13 +145,24 @@ function PlayerModal({
 
         {/* Action buttons */}
         <div className="flex gap-3">
-          <Link href="/lobby" className="flex-1">
-            <Button fullWidth icon={<Swords size={16} />}>
+          <Link href={currentUser ? "/lobby" : "/auth/login"} className="flex-1">
+            <Button 
+              fullWidth 
+              icon={<Swords size={16} />}
+              disabled={!currentUser}
+              title={!currentUser ? "Login to challenge" : undefined}
+            >
               Challenge to Battle
             </Button>
           </Link>
-          <Link href="/profile" className="flex-1">
-            <Button fullWidth variant="outline" icon={<UserPlus size={16} />}>
+          <Link href={currentUser ? "/profile" : "/auth/login"} className="flex-1">
+            <Button 
+              fullWidth 
+              variant="outline" 
+              icon={<UserPlus size={16} />}
+              disabled={!currentUser}
+              title={!currentUser ? "Login to view profile" : undefined}
+            >
               View Full Profile
             </Button>
           </Link>
@@ -279,6 +293,7 @@ function PlayerCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PlayersPage() {
+  const currentUser = useAppStore(s => s.player)
   const [dbPlayers, setDbPlayers] = useState<DBPlayer[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -489,7 +504,12 @@ export default function PlayersPage() {
       </main>
 
       {/* ── Player modal ─────────────────────────────────────────────────── */}
-      <PlayerModal player={selected} onClose={() => setSelected(null)} allPlayers={dbPlayers} />
+      <PlayerModal 
+        player={selected} 
+        onClose={() => setSelected(null)} 
+        allPlayers={dbPlayers} 
+        currentUser={currentUser}
+      />
     </div>
   )
 }

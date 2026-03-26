@@ -140,6 +140,7 @@ export default function AuthProvider({ children, initialUser, initialPlayer }: A
   const setPlayer = useAppStore((s) => s.setPlayer)
   const router    = useRouter()
   const initialized = useRef(false)
+  const loadingId = useRef<string | null>(null)
 
   // Immediate hydration if props are provided by the server
   if (!initialized.current) {
@@ -153,6 +154,9 @@ export default function AuthProvider({ children, initialUser, initialPlayer }: A
     const supabase = getSupabaseClient()
 
     async function loadPlayer(user: User) {
+      if (loadingId.current === user.id) return
+      loadingId.current = user.id
+      
       console.log('[AuthProvider] -> loadPlayer started for:', user.id)
       try {
         console.log('[AuthProvider] -> calling ensurePlayer...')
@@ -168,26 +172,13 @@ export default function AuthProvider({ children, initialUser, initialPlayer }: A
       } catch (err) {
         console.error('[AuthProvider] !! Exception in loadPlayer:', err)
         setPlayer(null)
+      } finally {
+        loadingId.current = null
       }
     }
 
-    // Skip initial fetch if we already have it from the server
-    if (!initialized.current) {
-      console.log('[AuthProvider] mounting, checking initial session...')
-      supabase.auth.getUser().then(({ data: { user }, error }) => {
-        console.log('[AuthProvider] initial getUser result:', { 
-          hasUser: !!user, 
-          userId: user?.id,
-          error: error?.message 
-        })
-        if (user) loadPlayer(user)
-        else       setPlayer(null)
-      }).catch(err => {
-        console.error('[AuthProvider] !! getUser mount crash:', err)
-      }).finally(() => {
-        initialized.current = true
-      })
-    }
+    // We rely on onAuthStateChange (INITIAL_SESSION) for the initial load.
+    // This prevents duplicate calls between getUser() and the subscription.
 
     // Subscribe to auth state changes (login / logout / token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -205,8 +196,16 @@ export default function AuthProvider({ children, initialUser, initialPlayer }: A
         }
 
         if (event === 'SIGNED_OUT') {
-          console.log('[AuthProvider] User signed out, redirecting to home...')
-          router.push('/')
+          console.log('[AuthProvider] User signed out')
+          // Only redirect if we are on a protected page. 
+          // Public pages like leaderboard, players, lobby can stay.
+          const publicPages = ['/leaderboard', '/players', '/lobby', '/maps']
+          const isPublic = publicPages.some(path => window.location.pathname.startsWith(path)) || window.location.pathname === '/'
+          
+          if (!isPublic) {
+            console.log('[AuthProvider] Not on public page, redirecting to home...')
+            router.push('/')
+          }
           router.refresh()
         }
       }
