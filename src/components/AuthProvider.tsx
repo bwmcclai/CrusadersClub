@@ -52,6 +52,7 @@ async function ensurePlayer(user: User): Promise<Player | null> {
     if (err.message === 'DATABASE_QUERY_TIMEOUT') {
       console.error('[AuthProvider] ensurePlayer: !! HANG DETECTED !! The query to the "players" table timed out after 8 seconds.')
       console.warn('[AuthProvider] ensurePlayer: This usually means the browser is blocking the request (Adblocker) or RLS policies are misconfigured.')
+      console.warn('[AuthProvider] ensurePlayer: Check if an adblocker like uBlock Origin or Privacy Badger is blocking requests to your Supabase URL.')
     }
     throw err
   }
@@ -155,6 +156,15 @@ export default function AuthProvider({ children, initialUser, initialPlayer }: A
 
     async function loadPlayer(user: User) {
       if (loadingId.current === user.id) return
+      
+      // Optimization: If we already have a hydrated player for this user in the store, skip the call to ensurePlayer.
+      // This helps avoid browser-level hangs (adblockers) on common transitions.
+      const currentPlayer = useAppStore.getState().player
+      if (currentPlayer && currentPlayer.id === user.id) {
+        console.log('[AuthProvider] -> loadPlayer: Player already loaded and matches session, skipping network call')
+        return
+      }
+
       loadingId.current = user.id
       
       console.log('[AuthProvider] -> loadPlayer started for:', user.id)

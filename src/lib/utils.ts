@@ -229,6 +229,126 @@ export function generateZonesFromFeatures(
   return { territories, bonusGroups }
 }
 
+// ─── City-based Zone Generation ──────────────────────────────────────────────
+//
+// Selects the top-N most-populated cities from a pre-filtered list,
+// projects them to 2D, builds Voronoi cells clipped to the union of
+// all selected country feature boundaries, then computes Delaunay adjacency.
+//
+// Returns one BonusGroup per country in the selection.
+
+import type { CityFull } from './citiesData'
+
+export interface CityZoneResult {
+  territories: Territory[]
+  bonusGroups: BonusGroup[]
+  cityCount:   number   // actual number of cities found (may be < requested count)
+}
+
+export function generateZonesFromCities(
+  cities:   CityFull[],        // pre-filtered to selected countries, sorted by pop desc
+  features: GeoJSON.Feature[], // country features for boundary clipping
+  count:    number,
+  width  = 1200,
+  height =  600,
+): CityZoneResult {
+  // Take the top-N cities (or all available if fewer than count)
+  const top = cities.slice(0, Math.max(2, count))
+  if (top.length < 2) return { territories: [], bonusGroups: [], cityCount: top.length }
+
+  // Project each city to 2D
+  const seeds: [number, number][] = top.map((c) => mercatorProject(c.lon, c.lat, width, height))
+
+  // Collect all projected outer rings from features for clipping
+  const projectedRings: [number, number][][] = []
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+
+  for (const feat of features) {
+    const geo = feat.geometry
+    if (!geo) continue
+    const outerRings: number[][][] =
+      geo.type === 'Polygon'      ? [geo.coordinates[0] as number[][]] :
+      geo.type === 'MultiPolygon' ? (geo.coordinates as number[][][][]).map((p) => p[0]) :
+      []
+    for (const ring of outerRings) {
+      const proj: [number, number][] = ring.map(([lon, lat]) => mercatorProject(lon, lat, width, height))
+      projectedRings.push(proj)
+      for (const [x, y] of proj) {
+        if (x < minX) minX = x; if (x > maxX) maxX = x
+        if (y < minY) minY = y; if (y > maxY) maxY = y
+      }
+    }
+  }
+
+  // Widen the bounding box slightly so edge Voronoi cells aren't degenerate
+  const pad = 20
+  const bbox: [number, number, number, number] = [minX - pad, minY - pad, maxX + pad, maxY + pad]
+
+  // Voronoi tessellation on city seeds
+  const delaunay = Delaunay.from(seeds)
+  const voronoi  = delaunay.voronoi(bbox)
+
+  // Adjacency from Delaunay neighbors
+  const adjacency: Set<number>[] = seeds.map(() => new Set())
+  seeds.forEach((_, i) => {
+    for (const j of Array.from(delaunay.neighbors(i))) {
+      adjacency[i].add(j)
+      adjacency[j].add(i)
+    }
+  })
+
+  // Build Territory objects — clip Voronoi cells to country boundaries
+  const territories: Territory[] = top.map((city, i) => {
+    const cell = voronoi.cellPolygon(i)
+    let polygon: [number, number][] = []
+
+    if (cell) {
+      // Keep only vertices that fall inside at least one country ring
+      const clipped = (cell as [number, number][]).filter(([x, y]) =>
+        projectedRings.some((ring) => pointInPolygon([x, y], ring)),
+      )
+      // Fall back to a tiny square around the seed if clipping removes everything
+      polygon = clipped.length >= 3 ? clipped : makeMarkerPolygon(seeds[i], 4)
+    } else {
+      polygon = makeMarkerPolygon(seeds[i], 4)
+    }
+
+    return {
+      id:           `city-${i}`,
+      name:         city.name,
+      polygon,
+      seed:         seeds[i],
+      adjacent_ids: Array.from(adjacency[i]).map((j) => `city-${j}`),
+      bonus_group:  `bonus-${city.country}`,
+    }
+  })
+
+  // One BonusGroup per country
+  const countryMap = new Map<number, string[]>()
+  top.forEach((city, i) => {
+    if (!countryMap.has(city.country)) countryMap.set(city.country, [])
+    countryMap.get(city.country)!.push(`city-${i}`)
+  })
+
+  const bonusGroups: BonusGroup[] = Array.from(countryMap.entries()).map(([iso, ids]) => ({
+    id:            `bonus-${iso}`,
+    name:          `Country ${iso}`,   // caller should rename with getCountryName(iso)
+    territory_ids: ids,
+    bonus_armies:  Math.max(2, Math.round(ids.length / 3)),
+  }))
+
+  return { territories, bonusGroups, cityCount: top.length }
+}
+
+/** Small 8-point polygon (octagon) around a point — used as a fallback marker */
+function makeMarkerPolygon(center: [number, number], r: number): [number, number][] {
+  const [cx, cy] = center
+  return Array.from({ length: 8 }, (_, i) => {
+    const a = (i / 8) * Math.PI * 2
+    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r] as [number, number]
+  })
+}
+
 // ─── Misc ─────────────────────────────────────────────────────────────────────
 
 export function formatMode(mode: string): string {

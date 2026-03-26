@@ -343,8 +343,14 @@ export default function LobbyPage() {
   const [showCreate, setShowCreate]   = useState(false)
   const [mapPreviewData, setMapPreviewData] = useState<any[] | null>(null)
   const [games, setGames]             = useState<LobbyGame[]>([])
+  const [page, setPage]               = useState(0)
+  const [hasMore, setHasMore]         = useState(true)
+  const [loading, setLoading]         = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [featuredMaps, setFeaturedMaps] = useState<any[]>([])
   
+  const PAGE_SIZE = 12
+
   // Globe Preview Modal State
   const [previewRegion, setPreviewRegion] = useState<string | null>(null)
 
@@ -358,22 +364,42 @@ export default function LobbyPage() {
     'Oceania': [-25, 140],
   }
 
-  // Fetch games and featured maps
-  useEffect(() => {
-    async function fetchData() {
-      const supabase = getSupabaseClient()
-      
-      // Fetch lobby games
-      const { data: gamesData } = await supabase
-        .from('lobby_games')
-        .select('*')
-        .order('created_at', { ascending: false })
-      
-      if (gamesData) {
-        setGames(gamesData)
-      }
+  async function fetchGames(pageNumber: number, isInitial: boolean = false) {
+    if (isInitial) setLoading(true)
+    else setLoadingMore(true)
 
-      // Fetch featured maps for sidebar
+    const supabase = getSupabaseClient()
+    const from = pageNumber * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+    
+    try {
+      const { data, error } = await supabase
+        .from('lobby_games')
+        .select('id, name, status, mode, max_players, current_players, created_at, map_name, region_name, has_ai, creator_name')
+        .order('created_at', { ascending: false })
+        .range(from, to)
+      
+      if (error) throw error
+      if (data) {
+        const newGames = data as unknown as LobbyGame[]
+        if (isInitial) setGames(newGames)
+        else setGames(prev => [...prev, ...newGames])
+        setHasMore(newGames.length === PAGE_SIZE)
+      }
+    } catch (e) {
+      console.error('Failed to fetch lobby games:', e)
+    } finally {
+      if (isInitial) setLoading(false)
+      else setLoadingMore(false)
+    }
+  }
+
+  // Initial fetch
+  useEffect(() => {
+    fetchGames(0, true)
+
+    async function fetchFeatured() {
+      const supabase = getSupabaseClient()
       const { data: mapsData } = await supabase
         .from('battle_maps')
         .select('id, name, territories, play_count')
@@ -391,8 +417,14 @@ export default function LobbyPage() {
         })))
       }
     }
-    fetchData()
+    fetchFeatured()
   }, [])
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1
+    setPage(nextPage)
+    fetchGames(nextPage)
+  }
 
   // Pre-populate from Map Creator redirect (?newMapId=xxx&mode=...&maxPlayers=...&aiCount=...)
   const newMapId      = searchParams.get('newMapId')    ?? undefined
@@ -529,7 +561,7 @@ export default function LobbyPage() {
               </div>
             )}
 
-            {filtered.length === 0 && (
+            {filtered.length === 0 ? (
               <div className="text-center py-20">
                 <Globe size={48} className="mx-auto text-crusader-gold/20 mb-4" />
                 <p className="text-crusader-gold/40 font-cinzel">No games found</p>
@@ -537,6 +569,19 @@ export default function LobbyPage() {
                   Create the First One
                 </Button>
               </div>
+            ) : (
+              hasMore && !search && (
+                <div className="pt-8 flex justify-center">
+                  <Button 
+                    variant="ghost" 
+                    onClick={handleLoadMore} 
+                    loading={loadingMore}
+                    className="font-cinzel tracking-widest px-8"
+                  >
+                    {loadingMore ? 'Forging more games…' : 'Forge More Games'}
+                  </Button>
+                </div>
+              )
             )}
           </div>
 
