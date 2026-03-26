@@ -47,13 +47,15 @@ export default function RegisterPage() {
       return
     }
 
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+
     const { error: authError } = await supabase.auth.signUp({
       email:    form.email,
       password: form.password,
       options: {
         data: { username: form.username.trim() },
-        // Use window.location.origin — works in dev and prod automatically.
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // Use origin — works in dev and prod automatically.
+        emailRedirectTo: `${origin}/auth/callback`,
       },
     })
 
@@ -71,11 +73,15 @@ export default function RegisterPage() {
 
   async function handleGoogle() {
     const supabase = getSupabaseClient()
-    // Use window.location.origin — works in dev and prod automatically.
+    
+    // Prioritize the environment variable if set, otherwise use current origin
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+    const callbackUrl = `${origin}/auth/callback`
+
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl,
       },
     })
   }

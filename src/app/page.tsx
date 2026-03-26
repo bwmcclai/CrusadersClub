@@ -16,7 +16,7 @@ export default function LandingPage() {
   const [latency, setLatency] = useState(24)
   const player = useAppStore((s) => s.player)
   const router = useRouter()
-  const tier   = player ? getTierForLevel(player.level) : null
+  const tier = player ? getTierForLevel(player.level) : null
 
   async function handleLogout() {
     await getSupabaseClient().auth.signOut()
@@ -25,8 +25,8 @@ export default function LandingPage() {
 
   const menuItems = [
     { id: 'campaign', label: 'Start / Continue Campaign', icon: Map, href: '/campaign' },
-    { id: 'find', label: 'Find a Match', icon: Users, href: '/lobby' },
-    { id: 'start', label: 'Start a Match', icon: Sword, href: '/map-creator' },
+    { id: 'find', label: 'Start or Find a Match', icon: Users, href: '/lobby' },
+    { id: 'start', label: 'Maps', icon: Sword, href: '/map-creator' },
     { id: 'leaderboards', label: 'Leaderboards', icon: Trophy, href: '/leaderboard' },
   ]
 
@@ -70,7 +70,7 @@ export default function LandingPage() {
             className="w-full h-full object-cover object-[15%_15%] md:object-[15%_10%] opacity-[0.9] transition-opacity duration-1000 transform scale-[2.2] translate-x-[-20%] md:scale-[1.02] md:translate-x-[2%] translate-y-[15%] md:translate-y-[2%] filter sepia-[0.4] brightness-75 contrast-110"
           />
         </div>
-        
+
         {/* Dark vignette for medieval atmosphere */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
       </div>
@@ -225,7 +225,7 @@ export default function LandingPage() {
         >
           {/* Complex Diegetic Frame Structure */}
           <div className="absolute inset-0 border-[3px] border-crusader-wood-dark bg-crusader-void/80 backdrop-blur-md overflow-hidden shadow-[0_15px_60px_rgba(0,0,0,1)] pointer-events-auto rounded-sm group">
-            
+
             {/* Inner Gold border */}
             <div className="absolute inset-1 border border-crusader-gold/40 z-30 pointer-events-none" />
 
