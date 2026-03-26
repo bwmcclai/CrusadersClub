@@ -40,9 +40,10 @@ function LoginForm() {
 
   async function handleGoogle() {
     const supabase = getSupabaseClient()
-    // Use window.location.origin so this automatically works in both
-    // dev (localhost:3000) and prod (your real domain) with no env var needed.
-    const callbackUrl = `${window.location.origin}/auth/callback`
+    
+    // Prioritize the environment variable if set, otherwise use current origin
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+    const callbackUrl = `${origin}/auth/callback`
     const finalRedirect = redirectTo !== '/' ? `${callbackUrl}?redirect=${redirectTo}` : callbackUrl
 
     await supabase.auth.signInWithOAuth({
@@ -51,7 +52,6 @@ function LoginForm() {
         redirectTo: finalRedirect,
       },
     })
-
   }
 
   return (
