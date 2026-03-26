@@ -1,6 +1,6 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -165,9 +165,15 @@ export default function MapCreatorPage() {
   const [editingId,   setEditingId]   = useState<string | null>(null)
   const [editName,    setEditName]    = useState('')
 
-  // ── Derived ───────────────────────────────────────────────────────────────────
   const mapMode      = getModeFromZoom(zoomDistance)
   const globeSelMode = mapMode === 'continent' ? 'continent' : 'multi-country'
+
+  const markers: MarkerDef[] = useMemo(() => generatedCities.map((c, i) => ({
+    id:    `city-${i}`,
+    lat:   c.lat,
+    lon:   c.lon,
+    label: c.name,
+  })), [generatedCities])
 
   // ── Continent selection ───────────────────────────────────────────────────────
   const handleContinentSelect = useCallback((
@@ -220,36 +226,40 @@ export default function MapCreatorPage() {
     setGeneratedCities([]); setBonusGroups([]); setSavedId(null)
   }, [])
 
-  // ── Generate zones → switch to preview ────────────────────────────────────────
-  async function handleGenerate() {
-    if (selCountryIds.length === 0) return
-    setGenerating(true)
-    await new Promise((r) => setTimeout(r, 50))
-    try {
-      // Get top-N most-populated cities from the selected countries
-      const allCities = getCitiesForCountries(selCountryIds)
-      const topCities = allCities.slice(0, Math.max(2, zoneCount))
-
-      // Build bonus groups per country (no Voronoi needed — just markers for now)
-      const countryMap = new Map<number, CityFull[]>()
-      for (const c of topCities) {
-        if (!countryMap.has(c.country)) countryMap.set(c.country, [])
-        countryMap.get(c.country)!.push(c)
-      }
-      const namedGroups: BonusGroup[] = Array.from(countryMap.entries()).map(([iso, cities]) => ({
-        id:            `bonus-${iso}`,
-        name:          getCountryName(iso) || `Country ${iso}`,
-        territory_ids: cities.map((_, i) => `city-${i}`),
-        bonus_armies:  Math.max(2, Math.round(cities.length / 3)),
-      }))
-
-      setGeneratedCities(topCities)
-      setBonusGroups(namedGroups)
-      setSavedId(null)
-      setView('preview')
-    } finally {
-      setGenerating(false)
+  // ── Auto-generate zones when selection or count changes ─────────────────────
+  useEffect(() => {
+    if (selCountryIds.length === 0) {
+      setGeneratedCities([])
+      setBonusGroups([])
+      return
     }
+
+    // Get top-N most-populated cities from the selected countries
+    const allCities = getCitiesForCountries(selCountryIds)
+    const topCities = allCities.slice(0, Math.max(2, zoneCount))
+
+    // Build bonus groups per country
+    const countryMap = new Map<number, CityFull[]>()
+    for (const c of topCities) {
+      if (!countryMap.has(c.country)) countryMap.set(c.country, [])
+      countryMap.get(c.country)!.push(c)
+    }
+    const namedGroups: BonusGroup[] = Array.from(countryMap.entries()).map(([iso, cities]) => ({
+      id:            `bonus-${iso}`,
+      name:          getCountryName(iso) || `Country ${iso}`,
+      territory_ids: cities.map((_, i) => `city-${i}`),
+      bonus_armies:  Math.max(2, Math.round(cities.length / 3)),
+    }))
+
+    setGeneratedCities(topCities)
+    setBonusGroups(namedGroups)
+    setSavedId(null)
+  }, [selCountryIds, zoneCount])
+
+  // ── Preview toggle ────────────────────────────────────────────────────────────
+  function handleGenerate() {
+    if (selCountryIds.length === 0) return
+    setView('preview')
   }
 
   // ── Rename territory ──────────────────────────────────────────────────────────
@@ -354,6 +364,7 @@ export default function MapCreatorPage() {
               onContinentSelect={handleContinentSelect}
               onMultiCountryToggle={handleCountryToggle}
               onZoomChange={setZoomDistance}
+              markers={markers}
               className="absolute inset-0 w-full h-full"
             />
             <ModeIndicator mode={mapMode} />
@@ -499,7 +510,7 @@ export default function MapCreatorPage() {
                 onClick={handleGenerate}
                 icon={<Layers size={15} />}
               >
-                Generate Zones
+                Review Map
               </Button>
               {selCountryIds.length === 0 && (
                 <p className="text-[10px] text-crusader-gold/25 text-center font-cinzel">
@@ -513,16 +524,7 @@ export default function MapCreatorPage() {
     )
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ── Preview view — globe with city markers ────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────────────────────
 
-  const markers: MarkerDef[] = generatedCities.map((c, i) => ({
-    id:    `city-${i}`,
-    lat:   c.lat,
-    lon:   c.lon,
-    label: c.name,
-  }))
 
   const canSave = !!player && meta.name.trim().length > 0 && generatedCities.length > 0
 
@@ -643,11 +645,10 @@ export default function MapCreatorPage() {
               fullWidth
               size="sm"
               variant="outline"
-              icon={<Shuffle size={13} />}
-              onClick={handleGenerate}
-              loading={generating}
+              icon={<ChevronLeft size={13} />}
+              onClick={() => setView('globe')}
             >
-              Regenerate with {zoneCount} Zones
+              Back to Globe
             </Button>
 
             {/* Error */}

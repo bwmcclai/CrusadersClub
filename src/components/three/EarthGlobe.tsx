@@ -348,78 +348,87 @@ export interface MarkerDef {
 }
 
 function CityMarkers({ markers }: { markers: MarkerDef[] }) {
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const { camera } = useThree()
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  const meshRef = useRef<THREE.InstancedMesh>(null!)
+  const texture = useTexture('/FlagMarker.png')
+
+  // Pre-compute positions to avoid doing it every frame
+  const positions = useMemo(() => markers.map(m => latLonToVec3(m.lat, m.lon, 1.006)), [markers])
+
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+
+  useFrame(() => {
+    if (!meshRef.current) return
+
+    positions.forEach((pos, i) => {
+      dummy.position.copy(pos)
+      
+      // Billboard: face the camera
+      dummy.lookAt(camera.position)
+      
+      // Scale based on hover
+      const s = hoveredIdx === i ? 0.045 : 0.03
+      dummy.scale.set(s, s, s)
+      
+      // Check visibility (occlusion by earth)
+      const dot = pos.clone().normalize().dot(camera.position.clone().normalize())
+      if (dot < 0.2) { // Hidden or near the edge
+        dummy.scale.set(0, 0, 0)
+      }
+
+      dummy.updateMatrix()
+      meshRef.current.setMatrixAt(i, dummy.matrix)
+    })
+    meshRef.current.instanceMatrix.needsUpdate = true
+  })
+
+  const handlePointerMove = (e: any) => {
+    e.stopPropagation()
+    if (e.instanceId !== undefined) {
+      setHoveredIdx(e.instanceId)
+    }
+  }
+
+  const handlePointerOut = () => {
+    setHoveredIdx(null)
+  }
 
   return (
     <>
-      {markers.map((m) => {
-        const pos = latLonToVec3(m.lat, m.lon, 1.006)
-        const isHovered = hoveredId === m.id
+      <instancedMesh
+        ref={meshRef}
+        args={[undefined, undefined, markers.length]}
+        onPointerMove={handlePointerMove}
+        onPointerOut={handlePointerOut}
+      >
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial map={texture} transparent alphaTest={0.5} depthWrite={false} side={THREE.DoubleSide} />
+      </instancedMesh>
 
-        return (
-          <Html
-            key={m.id}
-            position={pos}
-            center={false}
-            occlude
-            distanceFactor={3.5}
-            style={{
-              pointerEvents: 'none',
-              userSelect: 'none',
+      {/* Single label for hovered item */}
+      {hoveredIdx !== null && markers[hoveredIdx] && (
+        <Html
+          position={positions[hoveredIdx]}
+          center={false}
+          distanceFactor={3.5}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          <div
+            className="flex flex-col items-center"
+            style={{ 
+              gap: '4px',
+              transform: 'translate(-50%, 10px)', // Offset below the marker
             }}
           >
-            <div
-              className="flex flex-col items-center pointer-events-auto cursor-pointer outline-none select-none"
-              onPointerEnter={() => setHoveredId(m.id)}
-              onPointerLeave={() => setHoveredId(null)}
-              style={{ 
-                gap: '4px',
-                transform: 'translate(-50%, 0)', // Anchor by TOP-center (banner hangs down)
-              }}
-            >
-              {/* Custom Flag Marker */}
-              <div
-                className="transition-all duration-300 pointer-events-none"
-                style={{
-                  width:      isHovered ? 24 : 18,
-                  height:     isHovered ? 24 : 18,
-                  filter:     isHovered ? 'drop-shadow(0 0 8px rgba(77,217,172,0.8))' : 'none',
-                }}
-              >
-                <img
-                  src="/FlagMarker.png"
-                  alt="marker"
-                  className="w-full h-full object-contain pointer-events-none"
-                  style={{ display: 'block', background: 'transparent' }}
-                />
-              </div>
-
-              {/* Label — only visible on hover */}
-              <div
-                className={`transition-all duration-300 pointer-events-none transform ${
-                  isHovered ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-1 scale-95'
-                }`}
-              >
-                <span style={{
-                  fontSize:     '9px',
-                  fontFamily:   '"Cinzel", serif',
-                  color:        '#FFF',
-                  textShadow:   '0 1px 4px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.8)',
-                  whiteSpace:   'nowrap',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  background:   'rgba(8,6,3,0.85)',
-                  padding:      '2px 6px',
-                  borderRadius: '4px',
-                  border:       '1px solid rgba(212,168,67,0.3)',
-                }}>
-                  {m.label}
-                </span>
-              </div>
+            <div className="bg-crusader-void/90 border border-crusader-gold/30 rounded-md px-2 py-1 backdrop-blur-sm shadow-2xl">
+              <span className="font-cinzel text-[10px] text-white whitespace-nowrap uppercase tracking-wider">
+                {markers[hoveredIdx].label}
+              </span>
             </div>
-          </Html>
-        )
-      })}
+          </div>
+        </Html>
+      )}
     </>
   )
 }
