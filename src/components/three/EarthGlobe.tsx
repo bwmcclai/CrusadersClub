@@ -348,46 +348,74 @@ export interface MarkerDef {
 }
 
 function CityMarkers({ markers }: { markers: MarkerDef[] }) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+
   return (
     <>
       {markers.map((m) => {
-        const pos = latLonToVec3(m.lat, m.lon, 1.028)
+        const pos = latLonToVec3(m.lat, m.lon, 1.006)
+        const isHovered = hoveredId === m.id
+
         return (
-          <Html key={m.id} position={pos} center occlude distanceFactor={3.5}>
+          <Html
+            key={m.id}
+            position={pos}
+            center={false}
+            occlude
+            distanceFactor={3.5}
+            style={{
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          >
             <div
-              className="pointer-events-none flex flex-col items-center"
-              style={{ gap: '4px' }}
+              className="flex flex-col items-center pointer-events-auto cursor-pointer outline-none select-none"
+              onPointerEnter={() => setHoveredId(m.id)}
+              onPointerLeave={() => setHoveredId(null)}
+              style={{ 
+                gap: '4px',
+                transform: 'translate(-50%, 0)', // Anchor by TOP-center (banner hangs down)
+              }}
             >
-              {/* Pulsing ring + dot */}
-              <div style={{ position: 'relative', width: 14, height: 14 }}>
-                <div style={{
-                  position:    'absolute',
-                  inset:       0,
-                  borderRadius: '50%',
-                  border:      '1.5px solid rgba(77,217,172,0.5)',
-                  animation:   'ping 2s cubic-bezier(0,0,0.2,1) infinite',
-                }} />
-                <div style={{
-                  position:     'absolute',
-                  inset:        '2px',
-                  borderRadius: '50%',
-                  border:       '2px solid #4DD9AC',
-                  background:   'rgba(14,60,50,0.9)',
-                  boxShadow:    '0 0 8px rgba(77,217,172,0.55)',
-                }} />
+              {/* Custom Flag Marker */}
+              <div
+                className="transition-all duration-300 pointer-events-none"
+                style={{
+                  width:      isHovered ? 24 : 18,
+                  height:     isHovered ? 24 : 18,
+                  filter:     isHovered ? 'drop-shadow(0 0 8px rgba(77,217,172,0.8))' : 'none',
+                }}
+              >
+                <img
+                  src="/FlagMarker.png"
+                  alt="marker"
+                  className="w-full h-full object-contain pointer-events-none"
+                  style={{ display: 'block', background: 'transparent' }}
+                />
               </div>
-              {/* Label */}
-              <span style={{
-                fontSize:     '8.5px',
-                fontFamily:   '"Cinzel", serif',
-                color:        'rgba(255,255,255,0.9)',
-                textShadow:   '0 1px 4px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.8)',
-                whiteSpace:   'nowrap',
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-              }}>
-                {m.label}
-              </span>
+
+              {/* Label — only visible on hover */}
+              <div
+                className={`transition-all duration-300 pointer-events-none transform ${
+                  isHovered ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-1 scale-95'
+                }`}
+              >
+                <span style={{
+                  fontSize:     '9px',
+                  fontFamily:   '"Cinzel", serif',
+                  color:        '#FFF',
+                  textShadow:   '0 1px 4px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.8)',
+                  whiteSpace:   'nowrap',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  background:   'rgba(8,6,3,0.85)',
+                  padding:      '2px 6px',
+                  borderRadius: '4px',
+                  border:       '1px solid rgba(212,168,67,0.3)',
+                }}>
+                  {m.label}
+                </span>
+              </div>
             </div>
           </Html>
         )

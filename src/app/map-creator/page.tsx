@@ -161,6 +161,7 @@ export default function MapCreatorPage() {
   const [generating,  setGenerating]  = useState(false)
   const [saving,      setSaving]      = useState(false)
   const [savedId,     setSavedId]     = useState<string | null>(null)
+  const [saveError,   setSaveError]   = useState<string | null>(null)
   const [editingId,   setEditingId]   = useState<string | null>(null)
   const [editName,    setEditName]    = useState('')
 
@@ -254,7 +255,10 @@ export default function MapCreatorPage() {
   // ── Rename territory ──────────────────────────────────────────────────────────
   // ── Save ──────────────────────────────────────────────────────────────────────
   async function handleSave() {
-    if (!player || generatedCities.length === 0 || !meta.name.trim()) return
+    setSaveError(null)
+    if (!player) { setSaveError('You must be signed in to save a map.'); return }
+    if (generatedCities.length === 0) { setSaveError('Generate zones first.'); return }
+    if (!meta.name.trim()) { setSaveError('Please enter a map name.'); return }
     setSaving(true)
     try {
       const bounds = selCountryFeats.length > 0
@@ -263,15 +267,15 @@ export default function MapCreatorPage() {
 
       const regionName = selContinents.length > 0
         ? selContinents.map((c) => CONTINENT_INFO[c].label).join(' + ')
-        : selCountryIds.slice(0, 5).map(getCountryName).join(', ') +
+        : selCountryIds.slice(0, 5).map(getCountryName).filter(Boolean).join(', ') +
           (selCountryIds.length > 5 ? ` +${selCountryIds.length - 5} more` : '')
 
       const sb = getSupabaseClient()
       const { data, error } = await sb.from('battle_maps').insert({
-        name:          meta.name,
-        description:   meta.desc || null,
+        name:          meta.name.trim(),
+        description:   meta.desc.trim() || null,
         author_id:     player.id,
-        region_name:   regionName,
+        region_name:   regionName || 'Custom Region',
         region_bounds: bounds,
         territories:   generatedCities.map((c, i) => ({
           id:           `city-${i}`,
@@ -287,6 +291,8 @@ export default function MapCreatorPage() {
       if (error) throw error
       setSavedId(data.id)
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'An unexpected error occurred.'
+      setSaveError(msg)
       console.error('Save failed:', err)
     } finally {
       setSaving(false)
@@ -335,8 +341,8 @@ export default function MapCreatorPage() {
 
   if (view === 'globe') {
     return (
-      <div className="min-h-screen bg-crusader-void flex flex-col">
-        <main className="flex-1 pt-16 flex flex-row overflow-hidden" style={{ height: 'calc(100vh - 64px)' }}>
+      <div className="h-screen bg-crusader-void flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-row overflow-hidden pt-20">
 
           {/* Globe */}
           <div className="flex-1 relative bg-crusader-void overflow-hidden">
@@ -511,7 +517,6 @@ export default function MapCreatorPage() {
   // ── Preview view — globe with city markers ────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // Build markers from the generated city list
   const markers: MarkerDef[] = generatedCities.map((c, i) => ({
     id:    `city-${i}`,
     lat:   c.lat,
@@ -519,9 +524,11 @@ export default function MapCreatorPage() {
     label: c.name,
   }))
 
+  const canSave = !!player && meta.name.trim().length > 0 && generatedCities.length > 0
+
   return (
-    <div className="min-h-screen bg-crusader-void flex flex-col">
-      <main className="flex-1 pt-16 flex flex-row overflow-hidden" style={{ height: 'calc(100vh - 64px)' }}>
+    <div className="h-screen bg-crusader-void flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-row overflow-hidden pt-20">
 
         {/* Globe with zone markers */}
         <div className="flex-1 relative overflow-hidden">
@@ -547,13 +554,13 @@ export default function MapCreatorPage() {
           </div>
         </div>
 
-        {/* Right panel */}
+        {/* Right panel — fixed height, flex column so footer is always visible */}
         <div
-          className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10 overflow-hidden"
-          style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)' }}
+          className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10"
+          style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)', height: '100%' }}
         >
-          {/* Header */}
-          <div className="shrink-0 px-5 pt-5 pb-4 border-b border-crusader-gold/10">
+          {/* ── Header ── */}
+          <div className="shrink-0 px-5 pt-5 pb-3 border-b border-crusader-gold/10">
             <button
               onClick={() => setView('globe')}
               className="flex items-center gap-1.5 text-[11px] font-cinzel text-crusader-gold/35 hover:text-crusader-gold/70 transition-colors mb-3"
@@ -566,43 +573,48 @@ export default function MapCreatorPage() {
             </p>
           </div>
 
-          {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-none">
-
+          {/* ── Map Name ── */}
+          <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
             <SectionHeader>Map Name</SectionHeader>
             <Input
               value={meta.name}
-              onChange={(e) => setMeta((m) => ({ ...m, name: e.target.value }))}
+              onChange={(e) => { setMeta((m) => ({ ...m, name: e.target.value })); setSaveError(null) }}
               placeholder="Name your map..."
-              className="mb-4"
             />
+          </div>
 
-            <Divider />
-
-            {/* Bonus groups */}
-            {bonusGroups.length > 0 && (
-              <>
+          {/* ── Bonus Groups (compact pills) ── */}
+          {bonusGroups.length > 0 && (
+            <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
+              <div className="flex items-center justify-between mb-1.5">
                 <SectionHeader>Bonus Groups</SectionHeader>
-                <div className="space-y-1 mb-4">
-                  {bonusGroups.map((bg) => (
-                    <div key={bg.id} className="flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-lg bg-crusader-gold/5 border border-crusader-gold/10">
-                      <span className="text-crusader-gold/60 font-cinzel truncate">{bg.name}</span>
-                      <span className="text-crusader-gold font-bold font-cinzel shrink-0 ml-2">+{bg.bonus_armies} ✦</span>
-                    </div>
-                  ))}
-                </div>
-                <Divider />
-              </>
-            )}
+                <span className="text-[10px] font-cinzel text-crusader-gold/35 mb-2.5">
+                  {bonusGroups.length} group{bonusGroups.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {bonusGroups.map((bg) => (
+                  <div
+                    key={bg.id}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-crusader-gold/8 border border-crusader-gold/12 text-[10px] font-cinzel"
+                  >
+                    <span className="text-crusader-gold/65 truncate max-w-[80px]">{bg.name}</span>
+                    <span className="text-crusader-gold font-bold shrink-0">+{bg.bonus_armies}✦</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-            {/* Deployable zones list */}
-            <SectionHeader>Deployable Zones</SectionHeader>
-            <div className="space-y-0.5 max-h-72 overflow-y-auto scrollbar-none">
+          {/* ── Deployable Zones — fills remaining space and scrolls internally ── */}
+          <div className="flex-1 overflow-y-auto px-5 py-3 scrollbar-none min-h-0">
+            <SectionHeader>Deployable Zones ({generatedCities.length})</SectionHeader>
+            <div className="space-y-0.5">
               {generatedCities.map((c, i) => {
                 const cont = getContinent(c.country)
                 return (
-                  <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-crusader-gold/5 group transition-all">
-                    <div className="w-2 h-2 rounded-full shrink-0 border border-teal-400/60 bg-teal-900/60" />
+                  <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-crusader-gold/5 transition-colors">
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0 border border-teal-400/60 bg-teal-900/60" />
                     <span className="text-[11px] text-crusader-gold/65 flex-1 truncate font-cinzel">{c.name}</span>
                     {cont && (
                       <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CONTINENT_INFO[cont]?.color ?? '#C9A84C' }} />
@@ -611,22 +623,22 @@ export default function MapCreatorPage() {
                 )
               })}
             </div>
-
           </div>
 
-          {/* Sticky footer */}
-          <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2.5" style={{ background: 'rgba(6,5,3,0.95)' }}>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-cinzel text-crusader-gold/45 uppercase tracking-widest">Zone Count</span>
-                <span className="text-xs font-cinzel font-bold text-crusader-gold">{zoneCount}</span>
-              </div>
+          {/* ── Sticky footer — always visible ── */}
+          <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.97)' }}>
+            {/* Zone slider (compact) */}
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-cinzel text-crusader-gold/40 uppercase tracking-widest whitespace-nowrap">Zones</span>
               <input
                 type="range" min={2} max={200} value={zoneCount}
                 onChange={(e) => setZoneCount(Number(e.target.value))}
-                className="w-full accent-crusader-gold cursor-pointer"
+                className="flex-1 accent-crusader-gold cursor-pointer"
               />
+              <span className="text-[11px] font-cinzel font-bold text-crusader-gold w-6 text-right">{zoneCount}</span>
             </div>
+
+            {/* Regenerate */}
             <Button
               fullWidth
               size="sm"
@@ -637,17 +649,28 @@ export default function MapCreatorPage() {
             >
               Regenerate with {zoneCount} Zones
             </Button>
+
+            {/* Error */}
+            {saveError && (
+              <p className="text-[10px] text-red-400/85 font-cinzel text-center leading-relaxed">{saveError}</p>
+            )}
+
+            {/* Save & Publish */}
             <Button
               fullWidth
               size="lg"
-              disabled={!meta.name.trim()}
+              disabled={!canSave || saving}
               loading={saving}
               onClick={handleSave}
               icon={<Save size={15} />}
             >
-              Save & Publish Map
+              Save &amp; Publish Map
             </Button>
-            {!meta.name.trim() && (
+
+            {!player && (
+              <p className="text-[10px] text-amber-400/60 text-center font-cinzel">Sign in to publish maps</p>
+            )}
+            {player && !meta.name.trim() && (
               <p className="text-[10px] text-crusader-gold/25 text-center font-cinzel">Enter a map name to publish</p>
             )}
           </div>
@@ -656,3 +679,4 @@ export default function MapCreatorPage() {
     </div>
   )
 }
+
