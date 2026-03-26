@@ -148,8 +148,11 @@ export default function TerritoryMap({
   const computedViewBox = useMemo(() => {
     if (viewBox) return viewBox
     if (!territories.length) return '0 0 800 600'
-    const allX = territories.flatMap((t) => t.polygon.map(([x]) => x))
-    const allY = territories.flatMap((t) => t.polygon.map(([, y]) => y))
+    const allX = territories.flatMap((t) => t.polygon?.map(([x]) => x) ?? [])
+    const allY = territories.flatMap((t) => t.polygon?.map(([, y]) => y) ?? [])
+
+    if (!allX.length || !allY.length) return '0 0 800 600'
+
     const minX = Math.min(...allX) - 10
     const minY = Math.min(...allY) - 10
     const maxX = Math.max(...allX) + 10
