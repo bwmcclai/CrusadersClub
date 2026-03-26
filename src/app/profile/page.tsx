@@ -7,7 +7,6 @@ import {
   TrendingUp, Shield, Clock, ChevronRight, Lock, Star,
   Zap, Crown, AlertCircle,
 } from 'lucide-react'
-import Navbar from '@/components/layout/Navbar'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -181,7 +180,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-crusader-void">
-      <Navbar />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-28 pb-20">
 

@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import Navbar from '@/components/layout/Navbar'
 import Card, { CardHeader, CardBody } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import {
@@ -39,7 +38,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-crusader-void">
-      <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-16">
         {/* ── Header ──────────────────────────────────────────────────────── */}

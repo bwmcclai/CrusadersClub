@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import Navbar from '@/components/layout/Navbar'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
@@ -341,7 +340,6 @@ export default function PlayersPage() {
 
   return (
     <div className="min-h-screen bg-crusader-void">
-      <Navbar />
 
       {/* Background atmosphere */}
       <div className="fixed inset-0 pointer-events-none">

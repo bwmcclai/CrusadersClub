@@ -4,13 +4,11 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogOut, User, Map, Users, Sword, Trophy } from 'lucide-react'
+import { Map, Users, Sword, Trophy } from 'lucide-react'
 
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import { getTierForLevel } from '@/lib/xp'
-import FlagAvatar from '@/components/ui/FlagAvatar'
-import Navbar from '@/components/layout/Navbar'
 
 export default function LandingPage() {
   const [activeSlide, setActiveSlide] = useState(0)
@@ -19,10 +17,6 @@ export default function LandingPage() {
   const router = useRouter()
   const tier = player ? getTierForLevel(player.level) : null
 
-  async function handleLogout() {
-    await getSupabaseClient().auth.signOut()
-    router.refresh()
-  }
 
   const menuItems = [
     { id: 'campaign', label: 'Start / Continue Campaign', icon: Map, href: '/campaign' },
@@ -61,76 +55,6 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 pointer-events-none" />
       </div>
 
-      {/* ── Top Right Auth Actions ──────────────────────────────────────────── */}
-      <div className="absolute top-8 right-10 z-50 flex items-center gap-6">
-        <AnimatePresence mode="wait">
-          {player ? (
-            <motion.div
-              key="authed"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="flex items-center gap-5"
-            >
-              {/* Profile link with avatar */}
-              <Link href="/profile" className="flex items-center gap-3 group">
-                {/* Avatar */}
-                <div className="flex-shrink-0">
-                  <FlagAvatar
-                    flagId={player.avatar_url ?? null}
-                    size={36}
-                    fallbackLetter={player.username[0]}
-                    fallbackColor={player.default_color}
-                    className="border-2 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-                    style={{ borderColor: tier?.color }}
-                  />
-                </div>
-                <div className="hidden sm:block text-left">
-                  <p className="font-cinzel text-xs font-bold text-crusader-gold group-hover:glow-gold transition-all leading-none tracking-[0.1em]">
-                    {player.username}
-                  </p>
-                  <p className="text-[10px] leading-none mt-0.5 tracking-widest" style={{ color: tier?.color }}>
-                    Lv {player.level} · {tier?.title}
-                  </p>
-                </div>
-              </Link>
-
-              {/* Logout */}
-              <button
-                onClick={handleLogout}
-                className="font-cinzel text-crusader-gold/50 hover:text-crusader-crimson-bright transition-all duration-300 font-bold tracking-[0.2em] text-sm flex items-center gap-2 uppercase"
-              >
-                <LogOut size={14} /> Logout
-              </button>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="unauthed"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="flex items-center gap-6"
-            >
-              <Link
-                href="/auth/login"
-                className="font-cinzel text-crusader-gold/80 hover:text-crusader-gold hover:glow-gold transition-all duration-300 font-bold tracking-[0.2em] text-sm flex items-center gap-2 uppercase"
-              >
-                <User size={16} /> Login
-              </Link>
-              <Link href="/auth/register" className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-crusader-gold/40 to-crusader-crimson/40 rounded blur opacity-25 group-hover:opacity-60 transition duration-500" />
-                <div className="relative font-cinzel bg-crusader-dark border-2 border-crusader-gold/60 px-8 py-3 text-crusader-gold tracking-[0.1em] font-bold text-sm flex items-center justify-center group-hover:bg-crusader-gold/10 transition-colors shadow-[0_0_15px_rgba(201,168,76,0.3)] rounded-sm">
-                  <span className="uppercase whitespace-nowrap">Join</span>
-                </div>
-              </Link>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── Navbar ──────────────────────────────────────────────────────────── */}
-      <Navbar />
-
       {/* ── Main Content ────────────────────────────────────────────────────── */}
       <div className="relative z-40 h-full flex flex-col items-center justify-center gap-4 sm:gap-6 px-4 pt-20 pb-12">
 
@@ -153,8 +77,8 @@ export default function LandingPage() {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1, delay: 0.35 }}
-          className="w-full max-w-2xl xl:max-w-3xl flex-shrink-0"
-          style={{ height: 'clamp(280px, 48vh, 520px)' }}
+          className="relative w-full max-w-lg xl:max-w-xl flex-shrink-0 md:self-end md:mr-10 xl:mr-20"
+          style={{ height: 'clamp(260px, 44vh, 480px)' }}
         >
           {/* Complex Diegetic Frame Structure */}
           <div className="absolute inset-0 border-[3px] border-crusader-wood-dark bg-crusader-void/80 backdrop-blur-md overflow-hidden shadow-[0_15px_60px_rgba(0,0,0,1)] pointer-events-auto rounded-sm group">
