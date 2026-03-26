@@ -13,7 +13,7 @@ import FlagAvatar from '@/components/ui/FlagAvatar'
 
 const navLinks = [
   { href: '/lobby',       label: 'Play',        icon: Sword  },
-  { href: '/map-creator', label: 'Map Creator',  icon: Map    },
+  { href: '/maps',        label: 'Maps',         icon: Map    },
   { href: '/players',     label: 'Players',      icon: Users  },
   { href: '/leaderboard', label: 'Leaderboard',  icon: Trophy },
 ]
