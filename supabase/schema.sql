@@ -412,7 +412,8 @@ where p.games_played > 0
 order by p.elo desc;
 
 -- Lobby view: active + waiting games with map + creator info
-create or replace view public.lobby_games as
+drop view if exists public.lobby_games;
+create view public.lobby_games as
 select
   g.id,
   g.name,
@@ -422,9 +423,12 @@ select
   g.current_players,
   g.settings,
   g.created_at,
+  g.map_id,
   bm.name as map_name,
   bm.thumbnail_url as map_thumbnail,
   bm.region_name,
+  bm.region_bounds,
+  bm.country_iso_ids,
   p.username as creator_name,
   exists(
     select 1 from public.game_players gp where gp.game_id = g.id and gp.is_ai = true

@@ -133,8 +133,11 @@ export interface MapCreatorState {
 
 // ─── Lobby ────────────────────────────────────────────────────────────────────
 export interface LobbyGame extends Pick<Game, 'id' | 'name' | 'mode' | 'status' | 'max_players' | 'current_players' | 'created_at'> {
+  map_id: string
   map_name: string
   region_name: string
+  region_bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number }
+  country_iso_ids?: number[]
   map_thumbnail?: string
   creator_name: string
   has_ai: boolean

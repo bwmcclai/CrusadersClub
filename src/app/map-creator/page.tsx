@@ -20,6 +20,7 @@ import {
   X, Shuffle, MapPin, ZoomIn, ZoomOut,
   ChevronLeft,
 } from 'lucide-react'
+import ZoneCartogram from '@/components/map/ZoneCartogram'
 
 // ─── Dynamic import (Three.js SSR guard) ──────────────────────────────────────
 
@@ -135,115 +136,6 @@ function ZoomGuide({ mode }: { mode: MapMode }) {
   )
 }
 
-// ─── Zone Cartogram ───────────────────────────────────────────────────────────
-// Renders Voronoi territory polygons as a 2D flat map — Voronoi cells are
-// clipped to country outlines and colored by country (bonus group).
-
-const CARTOGRAM_PALETTE = [
-  '#C94040', '#3A7EC5', '#2E8B57', '#D4A843', '#7B4C96',
-  '#2E8B8B', '#C96C30', '#8C3E8C', '#4C8C4C', '#3E6B8C',
-  '#8C5A3E', '#5A3E8C', '#3E8C6B', '#8C3E5A', '#6B8C3E',
-  '#8C7A3E', '#3E5A8C', '#8C4C3E', '#5A8C3E', '#8C3E6B',
-]
-
-function ZoneCartogram({
-  territories,
-  bonusGroups,
-}: {
-  territories: Territory[]
-  bonusGroups: BonusGroup[]
-}) {
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
-
-  const viewBox = useMemo(() => {
-    if (!territories.length) return '0 0 800 400'
-    const allX = territories.flatMap((t) => t.polygon?.map(([x]) => x) ?? [])
-    const allY = territories.flatMap((t) => t.polygon?.map(([, y]) => y) ?? [])
-    if (!allX.length) return '0 0 800 400'
-    const pad = 12
-    const minX = Math.min(...allX) - pad
-    const minY = Math.min(...allY) - pad
-    const w    = Math.max(...allX) - minX + pad
-    const h    = Math.max(...allY) - minY + pad
-    return `${minX} ${minY} ${w} ${h}`
-  }, [territories])
-
-  if (!territories.length) {
-    return (
-      <div className="w-full h-full flex items-center justify-center">
-        <p className="text-crusader-gold/30 font-cinzel text-sm">Generating zones…</p>
-      </div>
-    )
-  }
-
-  return (
-    <svg
-      viewBox={viewBox}
-      className="w-full h-full"
-      preserveAspectRatio="xMidYMid meet"
-      style={{ background: '#080810' }}
-    >
-      {/* Subtle grid-line water texture */}
-      <defs>
-        <pattern id="water-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(100,140,200,0.06)" strokeWidth="0.5"/>
-        </pattern>
-      </defs>
-      <rect x="-9999" y="-9999" width="99999" height="99999" fill="url(#water-grid)" />
-
-      {territories.map((t, i) => {
-        if (!t.polygon || t.polygon.length < 3) return null
-        const isHovered = t.id === hoveredId
-        const color = CARTOGRAM_PALETTE[i % CARTOGRAM_PALETTE.length]
-        const d = t.polygon
-          .map(([x, y], j) => `${j === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
-          .join(' ') + ' Z'
-        const [cx, cy] = t.seed
-
-        return (
-          <g
-            key={t.id}
-            onMouseEnter={() => setHoveredId(t.id)}
-            onMouseLeave={() => setHoveredId(null)}
-          >
-            <path
-              d={d}
-              fill={color}
-              fillOpacity={isHovered ? 0.95 : 0.78}
-              stroke={isHovered ? '#F0D88A' : '#C9A84C'}
-              strokeWidth={isHovered ? 1.2 : 0.5}
-              strokeLinejoin="round"
-            />
-            {/* Highlight glow on hover */}
-            {isHovered && (
-              <path
-                d={d}
-                fill="none"
-                stroke="#F0D88A"
-                strokeWidth={3}
-                strokeLinejoin="round"
-                opacity={0.25}
-                style={{ filter: 'blur(2px)' }}
-              />
-            )}
-            {/* City name label */}
-            <text
-              x={cx} y={cy}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontSize={5}
-              fontFamily="Cinzel, serif"
-              fill="rgba(255,255,255,0.80)"
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
-              {t.name}
-            </text>
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -420,86 +312,11 @@ export default function MapCreatorPage() {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ── Published success screen ─────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ───────────────�        <main className="flex-1 flex flex-row overflow-hidden pt-20">
 
-  if (savedId) {
-    return (
-      <div className="min-h-screen bg-crusader-void flex items-center justify-center p-8">
-        <div className="text-center max-w-lg animate-fade-in">
-          <div className="w-20 h-20 rounded-full bg-crusader-gold/20 border border-crusader-gold/40 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle size={36} className="text-crusader-gold" />
-          </div>
-          <h2 className="font-cinzel text-3xl font-bold text-crusader-gold glow-gold mb-3">Map Published!</h2>
-          <p className="text-crusader-gold-light/60 mb-2">
-            <span className="text-crusader-gold font-semibold">{meta.name}</span> is ready for battle.
-          </p>
-          <p className="text-sm text-crusader-gold/40 mb-8">
-            {generatedCities.length} territories · {bonusGroups.length} bonus groups
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Button size="lg" icon={<Sword size={18} />} onClick={() => router.push(`/lobby?newMapId=${savedId}`)}>
-              Create a Game
-            </Button>
-            <Button size="lg" variant="outline" icon={<Plus size={18} />} onClick={() => {
-              clearAll()
-              setSavedId(null)
-              setMeta({ name: '', desc: '' })
-              setView('globe')
-            }}>
-              Create Another
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ── Main layout: Globe view ───────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  if (view === 'globe') {
-    return (
-      <div className="h-screen bg-crusader-void flex flex-col overflow-hidden">
-        <main className="flex-1 flex flex-row overflow-hidden pt-20">
-
-          {/* Globe */}
-          <div className="flex-1 relative bg-crusader-void overflow-hidden">
-            <EarthGlobe
-              interactive
-              autoRotate={false}
-              selectionMode={globeSelMode}
-              selectedIds={selCountryIds}
-              onContinentSelect={handleContinentSelect}
-              onMultiCountryToggle={handleCountryToggle}
-              onZoomChange={setZoomDistance}
-              markers={markers}
-              territories={generatedTerritories}
-              countryFeatures={selCountryFeats}
-              className="absolute inset-0 w-full h-full"
-            />
-            <ModeIndicator mode={mapMode} />
-            <ZoomGuide mode={mapMode} />
-
-            {selCountryIds.length > 0 && (
-              <div className="absolute top-5 right-5 pointer-events-none">
-                <div
-                  className="px-3 py-1.5 rounded-full border border-crusader-gold/30 backdrop-blur-md"
-                  style={{ background: 'rgba(8,6,4,0.75)' }}
-                >
-                  <span className="font-cinzel text-xs text-crusader-gold">
-                    {selCountryIds.length} {selCountryIds.length === 1 ? 'territory' : 'territories'} selected
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Panel */}
+          {/* Left Panel */}
           <div
-            className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10 overflow-hidden"
+            className="w-80 xl:w-96 flex flex-col border-r border-crusader-gold/10 overflow-hidden"
             style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)' }}
           >
             {/* Header */}
@@ -632,6 +449,103 @@ export default function MapCreatorPage() {
               )}
             </div>
           </div>
+
+          {/* Globe */}
+          <div className="flex-1 relative bg-crusader-void overflow-hidden">
+            <EarthGlobe
+              interactive
+              autoRotate={false}
+              selectionMode={globeSelMode}
+              selectedIds={selCountryIds}
+              onContinentSelect={handleContinentSelect}
+              onMultiCountryToggle={handleCountryToggle}
+              onZoomChange={setZoomDistance}
+              markers={markers}
+              territories={generatedTerritories}
+              countryFeatures={selCountryFeats}
+              className="absolute inset-0 w-full h-full"
+            />
+            <ModeIndicator mode={mapMode} />
+            <ZoomGuide mode={mapMode} />
+
+            {selCountryIds.length > 0 && (
+              <div className="absolute top-5 right-5 pointer-events-none">
+                <div
+                  className="px-3 py-1.5 rounded-full border border-crusader-gold/30 backdrop-blur-md"
+                  style={{ background: 'rgba(8,6,4,0.75)' }}
+                >
+                  <span className="font-cinzel text-xs text-crusader-gold">
+                    {selCountryIds.length} {selCountryIds.length === 1 ? 'territory' : 'territories'} selected
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+        </main>
+</span>
+                        <button
+                          onClick={() => removeCountry(id)}
+                          className="opacity-0 group-hover:opacity-100 text-crusader-gold/25 hover:text-red-400 transition-all"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+            </div>
+
+            {/* Zone count slider — always visible */}
+            <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10" style={{ background: 'rgba(6,5,3,0.88)' }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-cinzel text-crusader-gold/55 uppercase tracking-widest">
+                  Deployable Zones
+                </span>
+                <span className="text-sm font-cinzel font-bold text-crusader-gold">{zoneCount}</span>
+              </div>
+              <input
+                type="range" min={2} max={50} value={zoneCount}
+                onChange={(e) => setZoneCount(Number(e.target.value))}
+                className="w-full accent-crusader-gold cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-crusader-gold/20 mt-1 font-cinzel">
+                <span>2 min</span>
+                <span className="text-crusader-gold/35 text-center">
+                  {selCountryIds.length > 0
+                    ? `${getCitiesForCountries(selCountryIds).length} cities available`
+                    : 'select regions first'}
+                </span>
+                <span>50 max</span>
+              </div>
+              {selCountryIds.length > 0 && zoneCount > getCitiesForCountries(selCountryIds).length && (
+                <p className="text-[10px] text-amber-400/70 font-cinzel mt-1.5 text-center">
+                  Only {getCitiesForCountries(selCountryIds).length} cities available — will use all
+                </p>
+              )}
+            </div>
+
+            {/* Sticky footer */}
+            <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.95)' }}>
+              <Button
+                fullWidth
+                size="lg"
+                disabled={selCountryIds.length === 0}
+                loading={generating}
+                onClick={handleGenerate}
+                icon={<Layers size={15} />}
+              >
+                Review Map
+              </Button>
+              {selCountryIds.length === 0 && (
+                <p className="text-[10px] text-crusader-gold/25 text-center font-cinzel">
+                  Select regions on the globe first
+                </p>
+              )}
+            </div>
+          </div>
         </main>
       </div>
     )
@@ -650,7 +564,7 @@ export default function MapCreatorPage() {
 
           {previewTab === 'cartogram' ? (
             <div className="absolute inset-0 flex items-center justify-center p-4">
-              <ZoneCartogram territories={generatedTerritories} bonusGroups={bonusGroups} />
+              <ZoneCartogram territories={generatedTerritories} />
             </div>
           ) : (
             <EarthGlobe

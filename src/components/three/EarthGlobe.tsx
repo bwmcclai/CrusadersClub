@@ -167,6 +167,8 @@ function ZoneOverlays({
   // Raw TopoJSON stored so mesh() can query arc-level adjacency
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [admin1Topo, setAdmin1Topo] = useState<Record<string, any> | null>(null)
+  // True once admin1 fetch resolves (success or failure) — prevents Voronoi flash
+  const [admin1Loaded, setAdmin1Loaded] = useState(false)
 
   // GeoJSON features derived from topology (stable reference, no extra fetch)
   const admin1 = useMemo<Admin1Feature[]>(() => {
@@ -180,8 +182,14 @@ function ZoneOverlays({
     if (admin1Topo) return    // already loaded
     fetch('/admin1.json')
       .then((r) => r.json())
-      .then(setAdmin1Topo)
-      .catch(console.error)
+      .then((data) => {
+        setAdmin1Topo(data)
+        setAdmin1Loaded(true)
+      })
+      .catch((err) => {
+        console.error('Failed to load admin1.json, using Voronoi fallback', err)
+        setAdmin1Loaded(true)  // show Voronoi fallback on error
+      })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [territories.length])
 
@@ -501,12 +509,32 @@ function ZoneOverlays({
 
   useEffect(() => { return () => { texture?.dispose() } }, [texture])
 
-  if (!texture) return null
+  // Fade-in animation: start at 0 opacity and ramp to 1 over ~0.5s
+  const matRef   = useRef<THREE.MeshBasicMaterial>(null!)
+  const fadeRef  = useRef(0)
+  const prevTexRef = useRef<THREE.CanvasTexture | null>(null)
+
+  useFrame((_, delta) => {
+    if (!matRef.current) return
+    // Reset fade whenever the texture is replaced (admin1 first loads)
+    if (texture !== prevTexRef.current) {
+      prevTexRef.current = texture
+      fadeRef.current = 0
+    }
+    if (fadeRef.current < 1) {
+      fadeRef.current = Math.min(1, fadeRef.current + delta * 2.5)
+      matRef.current.opacity = fadeRef.current
+    }
+  })
+
+  // Do not render at all until admin1 has been attempted — avoids the brief
+  // Voronoi-fallback flash that appears before subdivision data is ready.
+  if (!texture || !admin1Loaded) return null
 
   return (
     <mesh>
       <sphereGeometry args={[1.002, 256, 256]} />
-      <meshBasicMaterial map={texture} transparent depthWrite={false} />
+      <meshBasicMaterial ref={matRef} map={texture} transparent depthWrite={false} opacity={0} />
     </mesh>
   )
 }
@@ -921,6 +949,32 @@ function CityMarkers({ markers }: { markers: MarkerDef[] }) {
   )
 }
 
+// ─── Camera Focus Controller ──────────────────────────────────────────────────
+// Imperatively positions the camera after mount so the correct region is always
+// centered — even if focusLatLon arrives after the Canvas has already mounted.
+
+function CameraFocus({ focusLatLon, cameraDistance }: {
+  focusLatLon?:   [number, number]
+  cameraDistance: number
+}) {
+  const { camera } = useThree()
+  const appliedRef = useRef(false)
+
+  useEffect(() => {
+    if (appliedRef.current) return
+    appliedRef.current = true
+    const pos = focusLatLon
+      ? latLonToVec3(focusLatLon[0], focusLatLon[1], cameraDistance)
+      : new THREE.Vector3(0, 0, cameraDistance)
+    camera.position.copy(pos)
+    camera.lookAt(0, 0, 0)
+    camera.updateProjectionMatrix()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return null
+}
+
 // ─── Public Interface ─────────────────────────────────────────────────────────
 
 export interface EarthGlobeProps {
@@ -938,6 +992,12 @@ export interface EarthGlobeProps {
   /** GeoJSON features of the selected countries — used to clip zone rendering */
   countryFeatures?:      GeoJSON.Feature[]
   focusLatLon?:          [number, number]
+  /** Camera distance from globe center — smaller = more zoomed in (default 2.8) */
+  cameraDistance?:       number
+  /** Show the star field background (default true) */
+  showStars?:            boolean
+  /** Show continent name labels (default true) */
+  showContinentLabels?:  boolean
   className?:            string
 }
 
@@ -954,9 +1014,13 @@ export default function EarthGlobe({
   territories    = [],
   countryFeatures = [],
   focusLatLon,
+  cameraDistance  = 2.8,
+  showStars       = true,
+  showContinentLabels = true,
   className      = 'w-full h-full',
 }: EarthGlobeProps) {
   const [worldData, setWorldData]       = useState<Topology | null>(null)
+  const [globeReady, setGlobeReady]     = useState(false)
   const [hovered, setHovered]           = useState<{ id: number; name: string; continent: ContinentId | null } | null>(null)
   const [hoveredContinent, setHovCont]  = useState<ContinentId | null>(null)
   const [selectedContinent, setSelCont] = useState<ContinentId | null>(null)
@@ -969,6 +1033,7 @@ export default function EarthGlobe({
       .then((r) => r.json())
       .then((data: Topology) => {
         setWorldData(data)
+        setGlobeReady(true)
         // Then load 10m in background for sharper borders at close zoom
         return fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-10m.json')
       })
@@ -1011,17 +1076,27 @@ export default function EarthGlobe({
     : hovered?.name ?? null
 
   const initCamPos = useMemo(() => {
-    if (!focusLatLon) return [0, 0, 2.8] as const
-    return latLonToVec3(focusLatLon[0], focusLatLon[1], 2.8).toArray() as [number, number, number]
-  }, [focusLatLon])
+    if (!focusLatLon) return [0, 0, cameraDistance] as const
+    return latLonToVec3(focusLatLon[0], focusLatLon[1], cameraDistance).toArray() as [number, number, number]
+  }, [focusLatLon, cameraDistance])
 
   return (
     <div className={`relative ${className}`}>
+      {/* Fade-in overlay: hides the canvas until the earth texture & borders are
+          ready, then transitions to transparent so the reveal is smooth. */}
+      <div
+        className="absolute inset-0 pointer-events-none z-10 transition-opacity duration-500"
+        style={{ opacity: globeReady ? 0 : 1, background: 'rgb(5,4,2)' }}
+      />
+
       <Canvas
         camera={{ position: initCamPos, fov: 45, near: 0.02, far: 1000 }}
         gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
         style={{ background: 'transparent' }}
       >
+        {/* Ensure camera is properly focused on the target region after mount */}
+        <CameraFocus focusLatLon={focusLatLon} cameraDistance={cameraDistance} />
+
         {/* Sun-like key light from upper-right */}
         <directionalLight position={[4, 2, 4]}   intensity={3.2}  color="#fff5e0" />
         {/* Cool fill light from the dark side */}
@@ -1030,7 +1105,7 @@ export default function EarthGlobe({
         <ambientLight intensity={0.08} />
 
         {/* Deep star field */}
-        <Stars radius={120} depth={80} count={8000} factor={4} saturation={0.3} fade speed={0.3} />
+        {showStars && <Stars radius={120} depth={80} count={8000} factor={4} saturation={0.3} fade speed={0.3} />}
 
         <Suspense fallback={null}>
           <EarthMesh />
@@ -1048,11 +1123,13 @@ export default function EarthGlobe({
               onContinentClick={handleContinentClick}
               onCountryClick={handleCountryClick}
             />
-            <ContinentLabels
-              hoveredContinent={hoveredContinent}
-              selectedContinent={selectedContinent}
-              selectionMode={selectionMode}
-            />
+            {showContinentLabels && (
+              <ContinentLabels
+                hoveredContinent={hoveredContinent}
+                selectedContinent={selectedContinent}
+                selectionMode={selectionMode}
+              />
+            )}
           </>
         )}
 
@@ -1071,7 +1148,9 @@ export default function EarthGlobe({
 
         {onZoomChange && <ZoomTracker onZoomChange={onZoomChange} />}
 
-        {/* Zone overlays: coloured Voronoi cells projected onto the sphere */}
+        {/* Zone overlays: coloured zone fills projected onto the sphere.
+            ZoneOverlays withholds rendering until admin1 data is loaded so the
+            Voronoi fallback never flashes before the subdivision map is ready. */}
         {territories.length > 0 && (
           <ZoneOverlays territories={territories} countryFeatures={countryFeatures} />
         )}

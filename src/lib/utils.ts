@@ -411,6 +411,20 @@ function makeMarkerPolygon(center: [number, number], r: number): [number, number
 
 // ─── Misc ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Compute a globe camera distance (1.4 – 2.8) from a lat/lon bounding box.
+ * Smaller value = more zoomed in.
+ */
+export function cameraDistanceFromBounds(bounds: {
+  minLat: number; maxLat: number; minLon: number; maxLon: number
+}): number {
+  const latSpan = Math.abs(bounds.maxLat - bounds.minLat)
+  const lonSpan = Math.abs(bounds.maxLon - bounds.minLon)
+  const span    = Math.max(latSpan, lonSpan)
+  // Linear mapping: span 0° → 1.4, span 180°+ → 2.8
+  return Math.max(1.4, Math.min(2.8, 1.4 + (span / 180) * 1.4))
+}
+
 export function formatMode(mode: string): string {
   switch (mode) {
     case 'lightning':  return '⚡ Lightning (1 min/turn)'

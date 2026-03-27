@@ -6,8 +6,8 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
-import { cn } from '@/lib/utils'
-import TerritoryMap from '@/components/three/TerritoryMap'
+import { cn, cameraDistanceFromBounds } from '@/lib/utils'
+import ZoneCartogram from '@/components/map/ZoneCartogram'
 import Button from '@/components/ui/Button'
 import { Map, Plus, Globe, Sword, Star, Layers, X, Search, ExternalLink } from 'lucide-react'
 import type { Territory, BonusGroup } from '@/types'
@@ -33,6 +33,7 @@ interface MapRecord {
   description?: string
   region_name: string
   region_bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number }
+  country_iso_ids?: number[]
   territories: Territory[]
   bonus_groups: BonusGroup[]
   play_count: number
@@ -44,89 +45,104 @@ interface MapRecord {
 // ─── Map Card ─────────────────────────────────────────────────────────────────
 
 function MapCard({ map, index, onClick }: { map: MapRecord; index: number; onClick: () => void }) {
-  const territoryCount = Array.isArray(map.territories) ? map.territories.length : 0
+  const territoryCount  = Array.isArray(map.territories)  ? map.territories.length  : 0
   const bonusGroupCount = Array.isArray(map.bonus_groups) ? map.bonus_groups.length : 0
-  const playersData = map.players
-  const authorName = Array.isArray(playersData) ? (playersData[0]?.username ?? 'Unknown') : ((playersData as any)?.username ?? 'Unknown')
+  const playersData     = map.players
+  const authorName      = Array.isArray(playersData)
+    ? (playersData[0]?.username ?? 'Unknown')
+    : ((playersData as any)?.username ?? 'Unknown')
+
+  const selectedIds  = map.country_iso_ids ?? []
+  const focusLatLon: [number, number] | undefined = map.region_bounds
+    ? [(map.region_bounds.minLat + map.region_bounds.maxLat) / 2,
+       (map.region_bounds.minLon + map.region_bounds.maxLon) / 2]
+    : undefined
+
+  const camDist = map.region_bounds ? cameraDistanceFromBounds(map.region_bounds) : 2.0
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5) }}
+      transition={{ duration: 0.35, delay: Math.min(index * 0.04, 0.4) }}
       onClick={onClick}
-      className="cursor-pointer group relative bg-crusader-void/80 border border-crusader-gold/20 hover:border-crusader-gold/60 rounded-sm overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.6)] hover:shadow-[0_8px_40px_rgba(201,168,76,0.2)] transition-all duration-300 hover:-translate-y-1"
+      className="cursor-pointer group relative bg-crusader-void/80 border border-crusader-gold/20 hover:border-crusader-gold/50 rounded-sm overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.6)] hover:shadow-[0_8px_40px_rgba(201,168,76,0.15)] transition-all duration-300 flex flex-row"
     >
-      {/* Map Preview */}
-      <div className="relative h-44 bg-crusader-dark/50 overflow-hidden border-b border-crusader-gold/10">
-        {territoryCount > 0 ? (
-          <div className="w-full h-full opacity-75 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-            <TerritoryMap territories={map.territories} className="w-full h-full" />
-          </div>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-crusader-gold/20">
-            <Map size={40} />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+      {/* Gold top line */}
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-crusader-gold/30 to-transparent z-10 pointer-events-none" />
 
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-crusader-void/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-          <span className="font-cinzel text-sm font-bold text-crusader-gold tracking-widest uppercase flex items-center gap-2">
-            <Globe size={16} /> View Map
-          </span>
-        </div>
+      {/* ── Globe side ─────────────────────────────────────────────── */}
+      <div className="relative w-[40%] flex-shrink-0 bg-crusader-void overflow-hidden min-h-[140px]">
+        <EarthGlobe
+          interactive={false}
+          autoRotate={false}
+          selectionMode="none"
+          selectedIds={selectedIds}
+          territories={map.territories}
+          focusLatLon={focusLatLon}
+          cameraDistance={camDist}
+          showStars={false}
+          showContinentLabels={false}
+          className="absolute inset-0 w-full h-full"
+        />
+        {/* Fade into card body */}
+        <div className="absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-crusader-void/80 to-transparent pointer-events-none" />
+      </div>
 
-        {/* Region badge */}
-        <div className="absolute top-3 left-3">
-          <span className="text-[10px] font-bold font-cinzel tracking-widest uppercase px-2 py-0.5 bg-black/70 border border-crusader-gold/30 text-crusader-gold/80 rounded-sm">
+      {/* ── Info side ─────────────────────────────────────────────── */}
+      <div className="w-[60%] p-5 flex flex-col justify-between min-w-0">
+        <div>
+          {/* Region badge */}
+          <span className="text-[9px] font-bold font-cinzel tracking-widest uppercase px-2 py-0.5 bg-crusader-gold/10 border border-crusader-gold/20 text-crusader-gold/70 rounded-sm">
             {map.region_name}
           </span>
+
+          <div className="flex items-start justify-between gap-2 mt-2">
+            <h3 className="font-cinzel text-base font-bold text-crusader-parchment group-hover:text-crusader-gold transition-colors leading-tight flex-1">
+              {map.name}
+            </h3>
+            <Link
+              href={`/maps/${map.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-shrink-0 text-crusader-gold/30 hover:text-crusader-gold transition-colors mt-0.5"
+              title="Open full page"
+            >
+              <ExternalLink size={12} />
+            </Link>
+          </div>
+
+          {map.description && (
+            <p className="text-xs text-crusader-gold/50 mt-1 line-clamp-2 leading-relaxed">{map.description}</p>
+          )}
+        </div>
+
+        {/* Stats + Author */}
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-1.5 text-[11px] text-crusader-gold/60">
+              <Layers size={10} /><span>{territoryCount} territories</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-crusader-gold/60">
+              <Sword size={10} /><span>{map.play_count ?? 0} plays</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-crusader-gold/60">
+              <Star size={10} /><span>{bonusGroupCount} bonus groups</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-crusader-gold/8">
+            <span className="text-[10px] text-crusader-gold/40 font-cinzel">By {authorName}</span>
+            <span className="text-[10px] text-crusader-gold/30">
+              {new Date(map.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Card Info */}
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-1">
-          <h3 className="font-cinzel text-base font-bold text-crusader-parchment group-hover:text-crusader-gold transition-colors truncate leading-tight flex-1">
-            {map.name}
-          </h3>
-          <Link
-            href={`/maps/${map.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="flex-shrink-0 text-crusader-gold/30 hover:text-crusader-gold transition-colors ml-1 mt-0.5"
-            title="Open full page"
-          >
-            <ExternalLink size={12} />
-          </Link>
-        </div>
-        {map.description && (
-          <p className="text-xs text-crusader-gold/50 mt-1 line-clamp-2 leading-relaxed">{map.description}</p>
-        )}
-
-        {/* Stats */}
-        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-crusader-gold/10">
-          <div className="flex items-center gap-1.5 text-[11px] text-crusader-gold/60">
-            <Layers size={11} />
-            <span>{territoryCount} territories</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-crusader-gold/60">
-            <Sword size={11} />
-            <span>{map.play_count ?? 0} plays</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-crusader-gold/60">
-            <Star size={11} />
-            <span>{bonusGroupCount} groups</span>
-          </div>
-        </div>
-
-        {/* Author + Date */}
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-crusader-gold/5">
-          <span className="text-[10px] text-crusader-gold/40 font-cinzel truncate">{authorName}</span>
-          <span className="text-[10px] text-crusader-gold/30 flex-shrink-0 ml-2">
-            {new Date(map.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </span>
-        </div>
+      {/* Hover overlay hint */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <span className="font-cinzel text-xs text-crusader-gold tracking-widest flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-sm">
+          <Globe size={13} /> View Details
+        </span>
       </div>
     </motion.div>
   )
@@ -206,7 +222,7 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
                   className="w-full h-full pointer-events-none p-4 pt-12"
                 >
                   {territoryCount > 0 ? (
-                    <TerritoryMap territories={map.territories} className="w-full h-full" />
+                    <ZoneCartogram territories={map.territories} className="w-full h-full" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-crusader-gold/20">
                       <Map size={60} />
@@ -222,7 +238,16 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
                   transition={{ duration: 0.2 }}
                   className="w-full h-full pt-10"
                 >
-                  <EarthGlobe selectionMode="none" />
+                  <EarthGlobe
+                    selectionMode="none"
+                    selectedIds={map.country_iso_ids ?? []}
+                    territories={map.territories}
+                    focusLatLon={map.region_bounds ? [
+                      (map.region_bounds.minLat + map.region_bounds.maxLat) / 2,
+                      (map.region_bounds.minLon + map.region_bounds.maxLon) / 2,
+                    ] : undefined}
+                    className="absolute inset-0 w-full h-full"
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -336,7 +361,7 @@ export default function MapsPage() {
 
       const { data, error } = await getSupabaseClient()
         .from('battle_maps')
-        .select('id, name, description, region_name, territories, bonus_groups, play_count, created_at, author_id, players(username)')
+        .select('id, name, description, region_name, region_bounds, country_iso_ids, territories, bonus_groups, play_count, created_at, author_id, players(username)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
         .range(from, to)
@@ -450,9 +475,9 @@ export default function MapsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
           {loading ? (
             // Skeleton grid
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div className="flex flex-col gap-4">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="h-72 bg-crusader-dark/30 border border-crusader-gold/10 rounded-sm animate-pulse" />
+                <div key={i} className="h-36 bg-crusader-dark/30 border border-crusader-gold/10 rounded-sm animate-pulse" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
@@ -481,7 +506,7 @@ export default function MapsPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              <div className="flex flex-col gap-4">
                 {filtered.map((map, index) => (
                   <MapCard key={map.id} map={map} index={index} onClick={() => setSelectedMap(map)} />
                 ))}
