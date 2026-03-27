@@ -433,6 +433,140 @@ function ZoneOverlays({
         ctx.lineWidth   = 3
         ctx.stroke()
 
+        // ── Orphan patch: sub-Voronoi fill for zones that won no subdivision ─
+        // When multiple zone seeds fall within the same state/province, only the
+        // nearest one wins that subdivision polygon. The others are "orphaned"
+        // (no land assigned). We detect them, find which subdivision their seed
+        // actually sits inside, then re-paint that subdivision using canvas
+        // clipping so all competing zones show their Voronoi-bounded portion.
+        {
+          const assignedGisSet = new Set(subdivZoneMap.values())
+          const orphanedEntries = entries.filter(({ gi }) => !assignedGisSet.has(gi))
+
+          if (orphanedEntries.length > 0) {
+            // Build a fast gi → entry map
+            const giToEntry = new Map<number, { territory: Territory; gi: number }>()
+            entries.forEach((e) => giToEntry.set(e.gi, e))
+
+            // Group orphans by which subdivision their seed falls inside
+            const subOrphanMap = new Map<string, { territory: Territory; gi: number }[]>()
+            const handledOrphanGis = new Set<number>()
+
+            for (const orphan of orphanedEntries) {
+              const [ex, ey] = orphan.territory.seed
+              const seedLon = ex / 1200 * 360 - 180
+              const seedLat = 90 - ey / 600 * 180
+              for (const sub of subdivs) {
+                if (!sub.geometry) continue
+                if (geoContains(sub as any, [seedLon, seedLat])) {
+                  const subId = String(sub.id)
+                  if (!subOrphanMap.has(subId)) subOrphanMap.set(subId, [])
+                  subOrphanMap.get(subId)!.push(orphan)
+                  handledOrphanGis.add(orphan.gi)
+                  break
+                }
+              }
+            }
+
+            // Re-render each affected subdivision with sub-Voronoi clipping
+            for (const [subId, subOrphans] of Array.from(subOrphanMap)) {
+              const sub = subdivs.find((s) => String(s.id) === subId)
+              if (!sub?.geometry) continue
+              const winnerGi  = subdivZoneMap.get(subId)
+              const winnerEntry = winnerGi !== undefined ? giToEntry.get(winnerGi) : undefined
+
+              ctx.save()
+              // Clip to this subdivision (intersects with the existing country clip)
+              traceGeo(sub.geometry)
+              ctx.clip('evenodd')
+
+              // Re-draw winner's Voronoi to restore its correct sub-portion
+              if (winnerEntry) {
+                const pts = rawMap.get(winnerEntry.territory.id)
+                if (pts) {
+                  tracePts(pts)
+                  const t = winnerEntry.territory
+                  ctx.fillStyle = (ownerColors[t.id] ?? ZONE_PALETTE[winnerEntry.gi % ZONE_PALETTE.length]) + 'CC'
+                  ctx.fill()
+                }
+              }
+
+              // Draw each orphan's Voronoi (clipped to subdivision)
+              for (const orphan of subOrphans) {
+                const pts = rawMap.get(orphan.territory.id)
+                if (!pts) continue
+                tracePts(pts)
+                const t = orphan.territory
+                ctx.fillStyle = (ownerColors[t.id] ?? ZONE_PALETTE[orphan.gi % ZONE_PALETTE.length]) + 'CC'
+                ctx.fill()
+                // Use seed as label anchor (subdivision centroid belongs to winner)
+                zoneLabelPos.set(orphan.gi, [orphan.territory.seed[0] * SX, orphan.territory.seed[1] * SY])
+              }
+
+              // Gold borders between all zones competing in this subdivision
+              const allInSub = [winnerEntry, ...subOrphans].filter(Boolean) as { territory: Territory; gi: number }[]
+              ctx.save()
+              ctx.filter   = 'blur(6px)'
+              ctx.lineJoin = 'round'; ctx.lineCap = 'round'
+              allInSub.forEach(({ territory }) => {
+                const pts = rawMap.get(territory.id)
+                if (!pts) return
+                tracePts(chaikinSmooth(pts, 4))
+                ctx.strokeStyle = 'rgba(255, 228, 130, 0.35)'
+                ctx.lineWidth   = 14
+                ctx.stroke()
+              })
+              ctx.restore()
+              ctx.lineJoin = 'round'; ctx.lineCap = 'round'
+              allInSub.forEach(({ territory }) => {
+                const pts = rawMap.get(territory.id)
+                if (!pts) return
+                tracePts(chaikinSmooth(pts, 4))
+                ctx.strokeStyle = 'rgba(215, 175, 60, 0.92)'
+                ctx.lineWidth   = 3
+                ctx.stroke()
+              })
+
+              ctx.restore()
+            }
+
+            // Fallback: orphans not inside any subdivision → render raw Voronoi
+            // clipped only to the country boundary (already active on the canvas).
+            const unhandledOrphans = orphanedEntries.filter(({ gi }) => !handledOrphanGis.has(gi))
+            if (unhandledOrphans.length > 0) {
+              unhandledOrphans.forEach(({ territory, gi }) => {
+                const pts = rawMap.get(territory.id)
+                if (!pts) return
+                tracePts(pts)
+                ctx.fillStyle = (ownerColors[territory.id] ?? ZONE_PALETTE[gi % ZONE_PALETTE.length]) + 'CC'
+                ctx.fill()
+                zoneLabelPos.set(gi, [territory.seed[0] * SX, territory.seed[1] * SY])
+              })
+              ctx.save()
+              ctx.filter   = 'blur(5px)'
+              ctx.lineJoin = 'round'
+              unhandledOrphans.forEach(({ territory }) => {
+                const pts = rawMap.get(territory.id)
+                if (!pts) return
+                tracePts(chaikinSmooth(pts, 4))
+                ctx.strokeStyle = 'rgba(255, 228, 130, 0.28)'
+                ctx.lineWidth   = 14
+                ctx.stroke()
+              })
+              ctx.restore()
+              unhandledOrphans.forEach(({ territory }) => {
+                const pts = rawMap.get(territory.id)
+                if (!pts) return
+                tracePts(chaikinSmooth(pts, 4))
+                ctx.strokeStyle = 'rgba(215, 175, 60, 0.90)'
+                ctx.lineWidth   = 3.5
+                ctx.lineJoin    = 'round'
+                ctx.stroke()
+              })
+            }
+          }
+        }
+
       } else {
         // ── VORONOI FALLBACK: for countries with no admin-1 data ───────────────
 
