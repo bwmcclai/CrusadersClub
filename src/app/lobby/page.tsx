@@ -8,6 +8,7 @@ import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
 import { Sword, Map, Users, Zap, Shield, Clock, Search, Plus, Filter, Bot, Globe, PenTool } from 'lucide-react'
 import { formatMode, cameraDistanceFromBounds, boundsToFocusLatLon } from '@/lib/utils'
+import { createGame } from '@/lib/gameService'
 import { motion } from 'framer-motion'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
@@ -229,12 +230,27 @@ function CreateGameModal({
     fetchMaps()
   }, [])
 
+  const player = useAppStore(s => s.player)
+
   async function handleCreate() {
+    if (!player || !form.name.trim() || !form.mapId) return
     setLoading(true)
-    // TODO: Supabase create game + redirect to game room
-    await new Promise((r) => setTimeout(r, 1000))
-    setLoading(false)
-    onClose()
+    try {
+      const gameId = await createGame({
+        name: form.name.trim(),
+        mapId: form.mapId,
+        mode: form.mode,
+        maxPlayers: form.maxPlayers,
+        aiCount: form.aiCount,
+        creatorId: player.id,
+        creatorName: player.username,
+        creatorAvatar: player.avatar_url,
+      })
+      router.push(`/game/${gameId}`)
+    } catch (err) {
+      console.error('Create game failed:', err)
+      setLoading(false)
+    }
   }
 
   return (

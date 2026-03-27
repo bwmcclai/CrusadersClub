@@ -1,966 +1,1043 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { getSupabaseClient } from '@/lib/supabase'
+import { joinGame } from '@/lib/gameService'
+import { useAppStore } from '@/lib/store'
+import type { Territory, BonusGroup, GameMode } from '@/types'
+import { ArrowLeft, Sword, Shield, Crosshair, ArrowRightLeft, Clock, Crown, Users, Dices } from 'lucide-react'
+import Button from '@/components/ui/Button'
 
-const PEERJS_URL = 'https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js'
+// ═══════════════════════════════════════════════════════════════════════════════
+// Types
+// ═══════════════════════════════════════════════════════════════════════════════
 
-const GAME_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
-  #conquest-root{--bg:#0d0d0d;--panel:#141414;--border:#2a2a2a;--gold:#c9a84c;--gold-dim:#7a5f2a;--red:#8b1a1a;--red-bright:#d42b2b;--text:#e8dfc8;--text-dim:#8a7d65;--map-sea:#0e1f30;}
-  #conquest-root *{box-sizing:border-box;margin:0;padding:0;}
-  #conquest-root{background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;font-size:16px;display:flex;flex-direction:column;height:calc(100vh - 80px);overflow:hidden;}
-  #conquest-root #c-header{background:linear-gradient(90deg,#0d0d0d,#1a1208,#0d0d0d);border-bottom:1px solid var(--gold-dim);padding:8px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:10;}
-  #conquest-root #c-header h1{font-family:'Cinzel',serif;font-weight:900;font-size:1.2rem;letter-spacing:5px;color:var(--gold);text-shadow:0 0 30px rgba(201,168,76,.4);}
-  #conquest-root #c-header h1 span{color:var(--text-dim);font-weight:400;font-size:.7rem;letter-spacing:3px;display:block;}
-  #conquest-root #phase-banner{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:3px;color:var(--text-dim);text-align:center;}
-  #conquest-root #phase-banner .phase-label{color:var(--gold);font-size:.9rem;font-weight:700;display:block;}
-  #conquest-root #player-strip{display:flex;gap:8px;}
-  #conquest-root .player-chip{font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:1px;padding:4px 9px;border:1px solid currentColor;opacity:.4;transition:opacity .3s,box-shadow .3s;border-radius:2px;}
-  #conquest-root .player-chip.active{opacity:1;box-shadow:0 0 12px currentColor;}
-  #conquest-root .player-chip.eliminated{opacity:.15;text-decoration:line-through;}
-  #online-bar{display:none;background:#0a1a2a;border-bottom:1px solid #1e3a5a;padding:5px 16px;font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:2px;color:#4a8ae8;flex-shrink:0;align-items:center;gap:10px;}
-  #online-bar.show{display:flex;}
-  .conn-dot{width:7px;height:7px;border-radius:50%;background:#4a8ae8;animation:c-blink 1.5s infinite;}
-  .conn-dot.connected{background:#2ecc71;animation:none;}
-  @keyframes c-blink{0%,100%{opacity:1}50%{opacity:.3}}
-  #room-code-display{background:rgba(74,138,232,.15);border:1px solid #1e3a5a;padding:2px 10px;border-radius:2px;font-size:.75rem;letter-spacing:4px;cursor:pointer;}
-  #room-code-display:hover{background:rgba(74,138,232,.3);}
-  #conquest-root #main{display:flex;flex:1;overflow:hidden;min-height:0;}
-  #conquest-root #sidebar{width:215px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;}
-  #conquest-root .sidebar-section{border-bottom:1px solid var(--border);padding:12px;}
-  #conquest-root .sidebar-section h3{font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:3px;color:var(--text-dim);margin-bottom:8px;text-transform:uppercase;}
-  #conquest-root #troop-info{font-size:1.7rem;font-family:'Cinzel',serif;color:var(--gold);text-align:center;}
-  #conquest-root #troop-info small{display:block;font-size:.6rem;letter-spacing:2px;color:var(--text-dim);font-family:'Crimson Pro',serif;}
-  #conquest-root #continents-list{font-size:.85rem;}
-  #conquest-root .continent-row{display:flex;justify-content:space-between;padding:3px 0;color:var(--text-dim);font-size:.72rem;}
-  #conquest-root .continent-row.owned{color:var(--text);}
-  #conquest-root .continent-row span:last-child{color:var(--gold);}
-  #conquest-root #actions{padding:12px;display:flex;flex-direction:column;gap:7px;}
-  #conquest-root .btn{font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:2px;padding:9px;border:1px solid var(--gold-dim);background:transparent;color:var(--gold);cursor:pointer;transition:all .2s;text-transform:uppercase;width:100%;}
-  #conquest-root .btn:hover:not(:disabled){background:rgba(201,168,76,.1);border-color:var(--gold);box-shadow:0 0 12px rgba(201,168,76,.2);}
-  #conquest-root .btn:disabled{opacity:.2;cursor:default;}
-  #conquest-root .btn.primary{background:var(--gold-dim);color:#000;border-color:var(--gold);font-weight:700;}
-  #conquest-root .btn.primary:hover:not(:disabled){background:var(--gold);}
-  #conquest-root .btn.danger{border-color:var(--red-bright);color:var(--red-bright);}
-  #conquest-root .btn.danger:hover:not(:disabled){background:rgba(212,43,43,.15);}
-  #conquest-root .btn.online-btn{border-color:#4a8ae8;color:#4a8ae8;}
-  #conquest-root .btn.online-btn:hover:not(:disabled){background:rgba(74,138,232,.15);}
-  #conquest-root #map-container{flex:1;position:relative;overflow:hidden;background:var(--map-sea);}
-  #conquest-root #map-svg{width:100%;height:100%;}
-  #conquest-root .territory{cursor:pointer;transition:filter .15s;stroke-width:1;stroke:rgba(0,0,0,.5);}
-  #conquest-root .territory:hover{filter:brightness(1.3);}
-  #conquest-root .territory.selected{stroke:#fff!important;stroke-width:2.5!important;filter:brightness(1.4);}
-  #conquest-root .territory.attack-source{stroke:#ffff00!important;stroke-width:2!important;}
-  #conquest-root .territory.attack-target{stroke:var(--red-bright)!important;stroke-width:2!important;filter:brightness(1.2);}
-  #conquest-root .territory.fortify-source{stroke:#00ff88!important;stroke-width:2!important;}
-  #conquest-root .territory.fortify-target{stroke:#00aaff!important;stroke-width:2!important;}
-  #conquest-root .territory.place-target{stroke:#ffdd00!important;stroke-width:2.5!important;filter:brightness(1.2);}
-  #conquest-root .territory.locked{cursor:default;}
-  .t-troops{font-family:'Cinzel',serif;font-size:11px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:middle;pointer-events:none;}
-  .t-dot{pointer-events:none;}
-  #conquest-root #log-panel{width:200px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
-  #conquest-root #log-panel h3{font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:3px;color:var(--text-dim);padding:10px 12px;border-bottom:1px solid var(--border);}
-  #conquest-root #log-entries{flex:1;overflow-y:auto;padding:7px;font-size:.75rem;line-height:1.6;}
-  #conquest-root #log-entries::-webkit-scrollbar{width:4px;}
-  #conquest-root #log-entries::-webkit-scrollbar-thumb{background:var(--border);}
-  #conquest-root .log-entry{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);color:var(--text-dim);}
-  #conquest-root .log-entry.combat{color:#e07070;}
-  #conquest-root .log-entry.capture{color:var(--gold);}
-  #conquest-root .log-entry.phase{color:var(--text);font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:1px;}
-  #conquest-root .log-entry.online{color:#4a8ae8;}
-  #conquest-root .log-entry.bot{color:#9b59b6;}
-  #conquest-root #dice-area{padding:10px;border-top:1px solid var(--border);min-height:75px;}
-  #conquest-root #dice-area h4{font-family:'Cinzel',serif;font-size:.55rem;letter-spacing:2px;color:var(--text-dim);margin-bottom:7px;}
-  #conquest-root .dice-row{display:flex;gap:5px;margin-bottom:4px;align-items:center;}
-  #conquest-root .die{width:26px;height:26px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:.85rem;font-weight:700;box-shadow:2px 2px 0 rgba(0,0,0,.5);}
-  #conquest-root .die.attacker{background:#e85555;color:#fff;}
-  #conquest-root .die.defender{background:#4a8ae8;color:#fff;}
-  #conquest-root .die.win{box-shadow:0 0 8px #ffd700;}
-  #conquest-root .die.lose{opacity:.5;}
-  #conquest-root .dice-label{font-size:.6rem;color:var(--text-dim);width:48px;}
-  #modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;align-items:center;justify-content:center;}
-  #modal-overlay.show{display:flex;}
-  #modal-box{background:#141414;border:1px solid #7a5f2a;padding:26px 34px;max-width:500px;width:94%;text-align:center;box-shadow:0 0 60px rgba(201,168,76,.12);max-height:92vh;overflow-y:auto;}
-  #modal-box h2{font-family:'Cinzel',serif;color:#c9a84c;font-size:1.3rem;letter-spacing:4px;margin-bottom:12px;}
-  #modal-box p{color:#8a7d65;margin-bottom:14px;line-height:1.7;font-size:.9rem;}
-  #modal-box .modal-controls{display:flex;flex-direction:column;gap:8px;}
-  .mode-cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;}
-  .mode-card{border:1px solid #2a2a2a;padding:16px 8px;cursor:pointer;transition:all .2s;border-radius:3px;text-align:center;}
-  .mode-card:hover{border-color:#7a5f2a;}
-  .mode-card.selected{border-color:#c9a84c;background:rgba(201,168,76,.08);}
-  .mode-card .mode-icon{font-size:1.5rem;margin-bottom:5px;}
-  .mode-card .mode-name{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:2px;color:#c9a84c;}
-  .mode-card .mode-desc{font-size:.68rem;color:#8a7d65;margin-top:3px;line-height:1.4;}
-  .setup-row{display:flex;gap:7px;justify-content:center;margin-bottom:10px;flex-wrap:wrap;}
-  .setup-btn{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:1px;padding:7px 13px;border:1px solid #2a2a2a;background:transparent;color:#8a7d65;cursor:pointer;transition:all .2s;border-radius:2px;}
-  .setup-btn.selected{border-color:#c9a84c;color:#c9a84c;background:rgba(201,168,76,.1);}
-  .setup-btn.bot{border-color:#9b59b6;color:#9b59b6;}
-  .setup-btn.bot.selected{background:rgba(155,89,182,.15);}
-  .setup-label{font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:2px;color:#8a7d65;margin-bottom:6px;}
-  .code-box{background:#0a1520;border:1px solid #1e3a5a;padding:14px;margin:10px 0;border-radius:3px;}
-  .big-code{font-family:'Cinzel',serif;font-size:2rem;letter-spacing:8px;color:#4a8ae8;text-shadow:0 0 20px rgba(74,138,232,.4);}
-  input.code-input{background:#0a1520;border:1px solid #1e3a5a;color:#4a8ae8;font-family:'Cinzel',serif;font-size:1.2rem;letter-spacing:4px;padding:10px 14px;width:100%;text-align:center;outline:none;border-radius:2px;margin:6px 0;}
-  input.code-input:focus{border-color:#4a8ae8;}
-  .or-div{text-align:center;color:#8a7d65;font-size:.75rem;margin:10px 0;position:relative;}
-  .or-div::before,.or-div::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:#2a2a2a;}
-  .or-div::before{left:0;}.or-div::after{right:0;}
-  #waiting-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;padding:20px;}
-  #waiting-overlay.show{display:flex;}
-  #waiting-overlay h2{font-family:'Cinzel',serif;color:#c9a84c;letter-spacing:4px;font-size:1.2rem;}
-  #waiting-overlay p{color:#8a7d65;letter-spacing:1px;font-size:.85rem;line-height:1.8;}
-  .spinner{width:38px;height:38px;border:3px solid #2a2a2a;border-top-color:#c9a84c;border-radius:50%;animation:c-spin 1s linear infinite;}
-  @keyframes c-spin{to{transform:rotate(360deg)}}
-  #notif{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#0a1a2a;border:1px solid #4a8ae8;padding:9px 18px;font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:2px;color:#4a8ae8;z-index:1200;opacity:0;transition:opacity .3s;pointer-events:none;border-radius:2px;white-space:nowrap;}
-  #notif.show{opacity:1;}
-  #win-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1100;align-items:center;justify-content:center;flex-direction:column;text-align:center;}
-  #win-overlay.show{display:flex;}
-  #win-overlay h1{font-family:'Cinzel',serif;font-size:2.5rem;letter-spacing:8px;color:#c9a84c;text-shadow:0 0 40px rgba(201,168,76,.6);animation:c-pulse 2s infinite;}
-  #win-overlay p{font-size:1.1rem;color:#8a7d65;margin:14px 0 26px;letter-spacing:2px;}
-  @keyframes c-pulse{0%,100%{opacity:1}50%{opacity:.7}}
-  #selected-info{display:none;}
-  #sel-name{font-family:'Cinzel',serif;font-size:.85rem;color:#c9a84c;margin-bottom:3px;}
-  #tooltip{position:fixed;background:rgba(18,18,18,.96);border:1px solid #7a5f2a;padding:6px 10px;font-size:.75rem;color:#e8dfc8;pointer-events:none;z-index:1200;display:none;max-width:150px;line-height:1.5;font-family:'Crimson Pro',serif;}
-  #conquest-root ::-webkit-scrollbar{width:5px;}#conquest-root ::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:3px;}
-`
+type Phase = 'deploy' | 'attack' | 'fortify'
 
-const GAME_JS = `// ═══════════════════════════════════════════════════════════
-// CONQUEST v2 — Bot AI + Online Multiplayer (PeerJS WebRTC)
-// ═══════════════════════════════════════════════════════════
-
-const CONTINENTS={
-  NA:{name:'North America',bonus:5,color:'#2d5a27'},
-  SA:{name:'South America',bonus:2,color:'#1a4a1a'},
-  EU:{name:'Europe',bonus:5,color:'#1a3a5c'},
-  AF:{name:'Africa',bonus:3,color:'#5c3a1a'},
-  AS:{name:'Asia',bonus:7,color:'#4a2a5c'},
-  OC:{name:'Oceania',bonus:2,color:'#2a4a4a'},
-};
-
-const TERRITORIES=[
-  {id:'AK',name:'Alaska',cont:'NA',cx:55,cy:70,pts:'30,40 80,40 90,60 85,90 55,100 30,80'},
-  {id:'NW',name:'NW Territory',cont:'NA',cx:155,cy:65,pts:'90,40 200,40 210,80 160,90 90,80'},
-  {id:'GR',name:'Greenland',cont:'NA',cx:280,cy:40,pts:'240,20 330,20 340,60 290,70 240,55'},
-  {id:'AL',name:'Alberta',cont:'NA',cx:120,cy:115,pts:'90,90 165,90 170,140 110,145 85,125'},
-  {id:'ON',name:'Ontario',cont:'NA',cx:195,cy:115,pts:'165,90 240,85 250,140 200,150 165,140'},
-  {id:'QU',name:'Quebec',cont:'NA',cx:265,cy:110,pts:'240,85 305,80 310,140 255,148 240,140'},
-  {id:'WU',name:'W United States',cont:'NA',cx:120,cy:175,pts:'85,148 170,145 175,200 100,205 80,175'},
-  {id:'EU2',name:'E United States',cont:'NA',cx:210,cy:175,pts:'170,145 265,148 268,205 175,205'},
-  {id:'CA',name:'Central America',cont:'NA',cx:155,cy:230,pts:'100,205 200,205 198,255 145,260 100,235'},
-  {id:'VE',name:'Venezuela',cont:'SA',cx:215,cy:265,pts:'200,255 255,250 260,290 210,295 195,275'},
-  {id:'PE',name:'Peru',cont:'SA',cx:200,cy:325,pts:'190,295 240,290 245,355 195,360 180,340'},
-  {id:'BR',name:'Brazil',cont:'SA',cx:265,cy:320,pts:'255,290 310,285 315,370 250,380 240,355'},
-  {id:'AR',name:'Argentina',cont:'SA',cx:225,cy:390,pts:'190,360 245,355 248,430 200,435 185,405'},
-  {id:'IC',name:'Iceland',cont:'EU',cx:360,cy:55,pts:'335,35 390,35 392,75 355,78 335,65'},
-  {id:'GB',name:'Great Britain',cont:'EU',cx:380,cy:105,pts:'358,85 400,82 405,130 372,132 358,118'},
-  {id:'WE',name:'W Europe',cont:'EU',cx:380,cy:165,pts:'358,135 405,132 408,195 370,198 355,178'},
-  {id:'SE2',name:'S Europe',cont:'EU',cx:430,cy:165,pts:'405,130 460,128 462,200 408,200'},
-  {id:'NE',name:'N Europe',cont:'EU',cx:440,cy:108,pts:'398,82 470,78 472,130 460,130 400,130'},
-  {id:'UA',name:'Ukraine',cont:'EU',cx:490,cy:105,pts:'468,78 530,75 532,145 462,145 470,130'},
-  {id:'SC',name:'Scandinavia',cont:'EU',cx:440,cy:60,pts:'408,35 478,32 480,80 468,80 400,82'},
-  {id:'NO',name:'N Africa',cont:'AF',cx:395,cy:245,pts:'355,200 455,198 460,285 400,290 355,270'},
-  {id:'EG',name:'Egypt',cont:'AF',cx:468,cy:222,pts:'456,200 515,198 518,255 460,258 455,235'},
-  {id:'EA',name:'E Africa',cont:'AF',cx:480,cy:295,pts:'458,258 520,255 522,340 462,340 455,310'},
-  {id:'CO',name:'Congo',cont:'AF',cx:432,cy:310,pts:'400,288 462,285 462,345 402,348 398,320'},
-  {id:'SA2',name:'S Africa',cont:'AF',cx:448,cy:370,pts:'402,348 525,340 525,410 445,418 400,392'},
-  {id:'MA',name:'Madagascar',cont:'AF',cx:535,cy:360,pts:'520,340 555,338 557,390 522,392'},
-  {id:'ME',name:'Middle East',cont:'AS',cx:525,cy:210,pts:'515,175 575,170 578,255 515,258 516,240'},
-  {id:'IN',name:'India',cont:'AS',cx:580,cy:265,pts:'557,225 615,220 618,310 560,315 555,295'},
-  {id:'SI',name:'Siberia',cont:'AS',cx:620,cy:75,pts:'535,40 700,38 702,130 535,135 535,110'},
-  {id:'UR',name:'Ural',cont:'AS',cx:555,cy:110,pts:'530,75 600,72 602,155 532,158 530,138'},
-  {id:'AF2',name:'Afghanistan',cont:'AS',cx:575,cy:165,pts:'572,130 630,128 632,200 575,205 574,185'},
-  {id:'CH',name:'China',cont:'AS',cx:658,cy:185,pts:'630,130 718,128 720,240 630,242 630,200'},
-  {id:'SE',name:'SE Asia',cont:'AS',cx:690,cy:265,pts:'658,240 720,238 724,305 658,308'},
-  {id:'JP',name:'Japan',cont:'AS',cx:758,cy:155,pts:'742,130 790,130 792,180 742,182'},
-  {id:'KA',name:'Kamchatka',cont:'AS',cx:768,cy:80,pts:'730,40 810,38 812,120 730,122'},
-  {id:'MO',name:'Mongolia',cont:'AS',cx:700,cy:128,pts:'702,95 758,92 760,162 702,165 700,140'},
-  {id:'IR',name:'Irkutsk',cont:'AS',cx:698,cy:90,pts:'702,65 758,62 758,95 702,97'},
-  {id:'YA',name:'Yakutsk',cont:'AS',cx:720,cy:55,pts:'705,38 760,36 760,64 705,66'},
-  {id:'IN2',name:'Indonesia',cont:'OC',cx:690,cy:338,pts:'655,310 730,308 732,365 652,368'},
-  {id:'NG',name:'New Guinea',cont:'OC',cx:770,cy:320,pts:'735,305 810,303 812,340 736,342'},
-  {id:'WA',name:'W Australia',cont:'OC',cx:720,cy:400,pts:'690,368 752,366 754,435 690,436'},
-  {id:'EA2',name:'E Australia',cont:'OC',cx:790,cy:400,pts:'752,366 820,364 822,440 754,440'},
-];
-
-const ADJ={
-  AK:['NW','AL','KA'],NW:['AK','AL','ON','GR'],GR:['NW','ON','QU','IC'],
-  AL:['AK','NW','ON','WU'],ON:['NW','AL','QU','WU','EU2'],QU:['NW','ON','EU2'],
-  WU:['AL','ON','EU2','CA'],EU2:['ON','QU','WU','CA'],CA:['WU','EU2','VE'],
-  VE:['CA','PE','BR'],PE:['VE','BR','AR'],BR:['VE','PE','AR','NO'],AR:['PE','BR'],
-  IC:['GR','GB','SC'],GB:['IC','WE','NE'],WE:['GB','SE2','NE','NO'],
-  SE2:['WE','NE','UA','EG','NO'],NE:['GB','WE','SE2','UA','SC'],UA:['NE','SE2','SC','UR','AF2','ME'],SC:['IC','GB','NE','UA'],
-  NO:['WE','SE2','EG','CO','EA','BR'],EG:['SE2','NO','EA','ME'],
-  EA:['EG','NO','CO','SA2','MA','ME'],CO:['NO','EA','SA2'],SA2:['CO','EA','MA'],MA:['EA','SA2'],
-  ME:['UA','SE2','EG','EA','IN','AF2'],IN:['ME','AF2','CH','SE'],
-  SI:['UR','MO','IR','YA','KA'],UR:['UA','AF2','SI'],AF2:['UA','UR','ME','IN','CH'],
-  CH:['AF2','IN','SI','MO','IR','SE','JP'],SE:['IN','CH','IN2'],JP:['CH','MO','KA'],
-  KA:['AK','SI','YA','MO','JP'],MO:['SI','KA','JP','CH','IR'],IR:['SI','MO','YA'],YA:['SI','IR','KA'],
-  IN2:['SE','NG','WA'],NG:['IN2','WA','EA2'],WA:['IN2','NG','EA2'],EA2:['NG','WA'],
-};
-
-const PLAYER_COLORS=['#e63535','#4a8ae8','#2ecc71','#f39c12','#9b59b6','#1abc9c'];
-const PLAYER_NAMES=['Red','Blue','Green','Orange','Purple','Teal'];
-
-// ── STATE ──
-let G={
-  players:[],territories:{},phase:'setup',turn:0,currentPlayer:0,
-  troopsToPlace:0,selected:null,attackSource:null,fortifySource:null,
-  gameMode:'local', myPlayerIndex:0, botIndices:[],
-};
-let botBusy=false;
-let peer=null,conn=null,isHost=false,myRoomCode='';
-
-// ── HELPERS ──
-const mix=(h1,h2,r)=>{
-  const p=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
-  const [r1,g1,b1]=p(h1),[r2,g2,b2]=p(h2);
-  return \`rgb(\${~~(r1*(1-r)+r2*r)},\${~~(g1*(1-r)+g2*r)},\${~~(b1*(1-r)+b2*r)})\`;
-};
-const rnd=n=>Math.floor(Math.random()*n);
-const pick=a=>a[rnd(a.length)];
-const tname=id=>TERRITORIES.find(t=>t.id===id).name;
-
-// ── INIT ──
-function initGame(numPlayers,mode,botSlots){
-  G.gameMode=mode; G.botIndices=botSlots||[];
-  G.players=Array.from({length:numPlayers},(_,i)=>({
-    name:botSlots.includes(i)?'General '+PLAYER_NAMES[i]:PLAYER_NAMES[i],
-    color:PLAYER_COLORS[i],alive:true,isBot:botSlots.includes(i)
-  }));
-  const ids=TERRITORIES.map(t=>t.id).sort(()=>Math.random()-.5);
-  G.territories={};
-  TERRITORIES.forEach(t=>{G.territories[t.id]={owner:-1,troops:0};});
-  ids.forEach((id,i)=>{G.territories[id].owner=i%numPlayers;G.territories[id].troops=1;});
-  const startTroops=[40,40,35,30,25,20][Math.min(numPlayers,6)-1]||20;
-  G.players.forEach((p,pi)=>{
-    p.troopsLeft=startTroops-ids.filter(id=>G.territories[id].owner===pi).length;
-  });
-  G.phase='initial-place';G.currentPlayer=0;G.turn=1;
-  G.selected=null;G.attackSource=null;G.fortifySource=null;
-  closeModal();renderAll();updatePhaseUI();
-  log('Conquest begins — '+numPlayers+' players','phase');
-  maybeBotTurn();
+interface GameData {
+  id: string
+  name: string
+  mode: GameMode
+  status: 'waiting' | 'active' | 'finished'
+  maxPlayers: number
+  currentPlayers: number
+  turnNumber: number
+  currentTurnPlayerId: string | null
+  turnDeadline: string | null
+  winnerId: string | null
+  createdBy: string | null
+  mapId: string
+  settings: any
 }
 
-// ── RENDER MAP ──
-function renderAll(){renderMap();renderSidebar();renderPlayerStrip();}
-
-function renderMap(){
-  const svg=document.getElementById('map-svg');
-  svg.querySelectorAll('.t-group').forEach(e=>e.remove());
-  TERRITORIES.forEach(t=>{
-    const ts=G.territories[t.id];
-    const oc=ts.owner>=0?G.players[ts.owner].color:'#333';
-    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
-    g.classList.add('t-group');
-
-    const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
-    poly.setAttribute('points',t.pts);
-    poly.setAttribute('fill',mix(CONTINENTS[t.cont].color,oc,.55));
-    poly.setAttribute('class','territory');
-    applyTClass(poly,t.id);
-    g.appendChild(poly);
-
-    const circ=document.createElementNS('http://www.w3.org/2000/svg','circle');
-    circ.setAttribute('cx',t.cx);circ.setAttribute('cy',t.cy);circ.setAttribute('r',12);
-    circ.setAttribute('fill',oc);circ.setAttribute('stroke','rgba(0,0,0,.5)');circ.setAttribute('stroke-width','1');
-    circ.setAttribute('class','t-dot');g.appendChild(circ);
-
-    const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
-    txt.setAttribute('x',t.cx);txt.setAttribute('y',t.cy);txt.setAttribute('class','t-troops');
-    txt.textContent=ts.troops;g.appendChild(txt);
-
-    g.addEventListener('click',()=>handleClick(t.id));
-    g.addEventListener('mouseenter',e=>showTip(t.id,e));
-    g.addEventListener('mouseleave',()=>{document.getElementById('tooltip').style.display='none';});
-    g.addEventListener('mousemove',e=>{const el=document.getElementById('tooltip');el.style.left=(e.clientX+14)+'px';el.style.top=(e.clientY-10)+'px';});
-    svg.appendChild(g);
-  });
+interface GP {
+  id: string
+  playerId: string | null
+  username: string
+  color: string
+  isAi: boolean
+  turnOrder: number
+  cardCount: number
+  isEliminated: boolean
 }
 
-function applyTClass(el,id){
-  el.classList.remove('selected','attack-source','attack-target','fortify-source','fortify-target','place-target','locked');
-  if(!isMyTurn()){el.classList.add('locked');return;}
-  const ts=G.territories[id],cp=G.currentPlayer;
-  if(G.phase==='initial-place'||G.phase==='place'){
-    if(id===G.selected)el.classList.add('selected');
-    else if(ts.owner===cp)el.classList.add('place-target');
-  }else if(G.phase==='attack'){
-    if(id===G.attackSource)el.classList.add('attack-source');
-    else if(G.attackSource&&canAtk(G.attackSource,id))el.classList.add('attack-target');
-    else if(!G.attackSource&&ts.owner===cp&&ts.troops>1)el.classList.add('attack-source');
-  }else if(G.phase==='fortify'){
-    if(id===G.fortifySource)el.classList.add('fortify-source');
-    else if(G.fortifySource&&canFort(G.fortifySource,id))el.classList.add('fortify-target');
-    else if(!G.fortifySource&&ts.owner===cp&&ts.troops>1)el.classList.add('fortify-source');
-  }
+interface TS {
+  territoryId: string
+  ownerId: string | null
+  armies: number
 }
 
-function isMyTurn(){
-  if(G.gameMode==='local')return true;
-  if(G.gameMode==='bot')return!G.players[G.currentPlayer].isBot&&!botBusy;
-  if(G.gameMode==='online')return G.currentPlayer===G.myPlayerIndex;
-  return false;
+interface GameEvent {
+  id: string
+  eventType: string
+  eventData: any
+  turnNumber: number
+  createdAt: string
+  gamePlayerId: string | null
 }
 
-function renderSidebar(){
-  const cp=G.players[G.currentPlayer]||G.players[0];
-  const ttp=G.phase==='initial-place'?(cp.troopsLeft||0):G.troopsToPlace;
-  document.getElementById('troops-to-place').textContent=ttp;
-  document.getElementById('troop-info').style.color=cp.color;
-  const cl=document.getElementById('continents-list');cl.innerHTML='';
-  Object.entries(CONTINENTS).forEach(([cid,cont])=>{
-    const terrs=TERRITORIES.filter(t=>t.cont===cid);
-    const own=terrs.filter(t=>G.territories[t.id].owner===G.currentPlayer).length;
-    const r=document.createElement('div');
-    r.className='continent-row'+(own===terrs.length?' owned':'');
-    r.innerHTML=\`<span>\${cont.name}</span><span>\${own}/\${terrs.length} (+\${cont.bonus})</span>\`;
-    cl.appendChild(r);
-  });
-  if(G.selected&&G.territories[G.selected]){
-    const ts=G.territories[G.selected],td=TERRITORIES.find(t=>t.id===G.selected),own=ts.owner>=0?G.players[ts.owner]:null;
-    document.getElementById('selected-info').style.display='';
-    document.getElementById('sel-name').textContent=td.name;
-    document.getElementById('sel-troops').textContent=ts.troops+' troops';
-    document.getElementById('sel-owner').textContent=own?'Owner: '+own.name:'Unclaimed';
-    document.getElementById('sel-owner').style.color=own?own.color:'var(--text-dim)';
-  }else document.getElementById('selected-info').style.display='none';
+// ═══════════════════════════════════════════════════════════════════════════════
+// Utilities
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function computeViewBox(territories: Territory[]) {
+  if (!territories.length) return '0 0 800 400'
+  const xs = territories.flatMap(t => t.polygon?.map(([x]) => x) ?? [])
+  const ys = territories.flatMap(t => t.polygon?.map(([, y]) => y) ?? [])
+  if (!xs.length) return '0 0 800 400'
+  const pad = 15
+  const minX = Math.min(...xs) - pad, minY = Math.min(...ys) - pad
+  return `${minX} ${minY} ${Math.max(...xs) - minX + pad} ${Math.max(...ys) - minY + pad}`
 }
 
-function renderPlayerStrip(){
-  const strip=document.getElementById('player-strip');strip.innerHTML='';
-  G.players.forEach((p,i)=>{
-    const d=document.createElement('div');
-    d.className='player-chip'+(i===G.currentPlayer?' active':'')+(!p.alive?' eliminated':'');
-    d.style.color=p.color;
-    const own=Object.values(G.territories).filter(t=>t.owner===i).length;
-    d.innerHTML=p.name+(p.isBot?' 🤖':'')+(p.alive?\` (\${own})\`:'');
-    strip.appendChild(d);
-  });
-}
-
-function updatePhaseUI(){
-  const cp=G.players[G.currentPlayer]||G.players[0];
-  const me=isMyTurn(),isBot=G.gameMode==='bot'&&cp.isBot;
-  const ph=document.getElementById('phase-label'),tl=document.getElementById('turn-label'),ins=document.getElementById('instructions');
-  const bep=document.getElementById('btn-end-phase'),bap=document.getElementById('btn-auto-place'),bet=document.getElementById('btn-end-turn');
-  bep.style.display='';bap.style.display='none';bet.style.display='none';
-  bep.disabled=!me;
-
-  if(G.phase==='initial-place'){
-    ph.textContent='INITIAL PLACEMENT';ph.style.color=cp.color;tl.textContent=cp.name+(cp.isBot?' [AI]':'');
-    const ttp=cp.troopsLeft||0;
-    bep.textContent=ttp>0?\`Place \${ttp} first\`:'Next Player';bep.disabled=!me||ttp>0;
-    bap.style.display=me?'':'none';bap.disabled=false;
-    ins.innerHTML=isBot?\`<em style="color:\${cp.color}">\${cp.name} is placing troops...</em>\`
-      :\`<b style="color:\${cp.color}">\${cp.name}</b> — click your territories to place <b style="color:var(--gold)">\${ttp}</b> troops.\`;
-  }else if(G.phase==='place'){
-    ph.textContent='REINFORCE';ph.style.color=cp.color;tl.textContent=\`\${cp.name} — Turn \${G.turn}\`;
-    bep.textContent=G.troopsToPlace>0?\`Place \${G.troopsToPlace} first\`:'→ Attack';bep.disabled=!me||G.troopsToPlace>0;
-    bap.style.display=me?'':'none';bap.disabled=false;
-    ins.innerHTML=isBot?\`<em style="color:\${cp.color}">\${cp.name} is reinforcing...</em>\`
-      :\`Place <b style="color:var(--gold)">\${G.troopsToPlace}</b> troops on your territories.\`;
-  }else if(G.phase==='attack'){
-    ph.textContent='ATTACK';ph.style.color='#e07070';tl.textContent=\`\${cp.name} — Turn \${G.turn}\`;
-    bep.textContent='→ Fortify';bep.disabled=!me;bet.style.display='';bet.disabled=!me;
-    ins.innerHTML=isBot?\`<em style="color:\${cp.color}">\${cp.name} is attacking...</em>\`
-      :me?\`Select <b style="color:\${cp.color}">your territory</b> (2+ troops), then an adjacent enemy.\`
-      :\`Waiting for <b style="color:\${cp.color}">\${cp.name}</b>...\`;
-  }else if(G.phase==='fortify'){
-    ph.textContent='FORTIFY';ph.style.color='#70a0e0';tl.textContent=\`\${cp.name} — Turn \${G.turn}\`;
-    bep.textContent='End Turn';bep.disabled=!me;
-    ins.innerHTML=isBot?\`<em style="color:\${cp.color}">\${cp.name} is fortifying...</em>\`
-      :me?\`Move troops between adjacent friendly territories, then End Turn.\`
-      :\`Waiting for <b style="color:\${cp.color}">\${cp.name}</b>...\`;
-  }
-}
-
-// ── CLICK HANDLER ──
-function handleClick(id){
-  if(!isMyTurn())return;
-  const ts=G.territories[id],cp=G.currentPlayer;
-  G.selected=id;
-
-  if(G.phase==='initial-place'){
-    if(ts.owner!==cp||(G.players[cp].troopsLeft||0)<=0){renderAll();updatePhaseUI();return;}
-    ts.troops++;G.players[cp].troopsLeft--;
-    log(G.players[cp].name+' placed on '+tname(id));
-    if(G.gameMode==='online')syncState();
-    renderAll();updatePhaseUI();
-    if(G.players[cp].troopsLeft<=0)advanceInitial();
-    return;
-  }
-  if(G.phase==='place'){
-    if(ts.owner!==cp||G.troopsToPlace<=0){renderAll();renderSidebar();return;}
-    ts.troops++;G.troopsToPlace--;
-    log(G.players[cp].name+' reinforced '+tname(id));
-    if(G.gameMode==='online')syncState();
-    renderAll();updatePhaseUI();return;
-  }
-  if(G.phase==='attack'){
-    if(!G.attackSource){
-      if(ts.owner===cp&&ts.troops>1)G.attackSource=id;
-    }else if(id===G.attackSource){G.attackSource=null;G.selected=null;}
-    else if(canAtk(G.attackSource,id)){showAtkModal(G.attackSource,id);return;}
-    else{G.attackSource=(ts.owner===cp&&ts.troops>1)?id:null;G.selected=G.attackSource;}
-    renderAll();renderSidebar();return;
-  }
-  if(G.phase==='fortify'){
-    if(!G.fortifySource){
-      if(ts.owner===cp&&ts.troops>1)G.fortifySource=id;
-    }else if(id===G.fortifySource){G.fortifySource=null;G.selected=null;}
-    else if(canFort(G.fortifySource,id)){showFortModal(G.fortifySource,id);return;}
-    else{G.fortifySource=(ts.owner===cp&&ts.troops>1)?id:null;G.selected=G.fortifySource;}
-    renderAll();renderSidebar();
-  }
-}
-
-const canAtk=(f,t)=>ADJ[f]&&ADJ[f].includes(t)&&G.territories[f].owner===G.currentPlayer&&G.territories[t].owner!==G.currentPlayer&&G.territories[f].troops>1;
-const canFort=(f,t)=>ADJ[f]&&ADJ[f].includes(t)&&G.territories[f].owner===G.currentPlayer&&G.territories[t].owner===G.currentPlayer&&G.territories[f].troops>1;
-
-function advanceInitial(){
-  let next=(G.currentPlayer+1)%G.players.length,tries=0;
-  while((G.players[next].troopsLeft||0)<=0&&tries++<G.players.length)next=(next+1)%G.players.length;
-  if(G.players.every(p=>(p.troopsLeft||0)<=0)){startMain();return;}
-  G.currentPlayer=next;renderAll();updatePhaseUI();maybeBotTurn();
-}
-
-function startMain(){
-  G.phase='place';G.currentPlayer=0;G.turn=1;G.attackSource=null;G.fortifySource=null;G.selected=null;
-  G.troopsToPlace=calcRein(0);
-  if(G.gameMode==='online')syncState();
-  renderAll();updatePhaseUI();
-  log(\`--- Turn 1 --- \${G.players[0].name}'s turn ---\`,'phase');
-  maybeBotTurn();
-}
-
-function calcRein(pi){
-  let t=Math.max(3,Math.floor(Object.values(G.territories).filter(ts=>ts.owner===pi).length/3));
-  Object.entries(CONTINENTS).forEach(([cid,c])=>{if(TERRITORIES.filter(t=>t.cont===cid).every(t=>G.territories[t.id].owner===pi))t+=c.bonus;});
-  return t;
-}
-
-// ── PHASE TRANSITIONS ──
-function endPhase(){
-  if(!isMyTurn())return;
-  if(G.phase==='initial-place'){advanceInitial();return;}
-  if(G.phase==='place')G.phase='attack';
-  else if(G.phase==='attack')G.phase='fortify';
-  else if(G.phase==='fortify'){endTurn();return;}
-  G.attackSource=null;G.fortifySource=null;G.selected=null;
-  if(G.gameMode==='online')syncState();
-  renderAll();updatePhaseUI();
-}
-
-function endTurn(){
-  if(G.gameMode==='online'&&G.currentPlayer!==G.myPlayerIndex)return;
-  G.phase='place';G.attackSource=null;G.fortifySource=null;G.selected=null;
-  let next=(G.currentPlayer+1)%G.players.length;
-  while(!G.players[next].alive)next=(next+1)%G.players.length;
-  G.currentPlayer=next;G.turn++;G.troopsToPlace=calcRein(next);
-  if(G.gameMode==='online')syncState();
-  renderAll();updatePhaseUI();
-  log(\`--- Turn \${G.turn} --- \${G.players[next].name}'s turn ---\`,'phase');
-  log(G.players[next].name+' receives '+G.troopsToPlace+' reinforcements');
-  maybeBotTurn();
-}
-
-// ── ATTACK ──
-function showAtkModal(from,to){
-  const max=Math.min(3,G.territories[from].troops-1);
-  showModal('ATTACK',\`\${tname(from)} → \${tname(to)}\\nDefender has \${G.territories[to].troops} troops.\`,
-    \`<div class="setup-label">ATTACK DICE</div>
-     <div style="text-align:center;margin:10px 0;"><span id="adk" style="font-family:Cinzel;font-size:2rem;color:var(--gold);">\${max}</span><small style="display:block;color:var(--text-dim)">dice (max \${max})</small></div>
-     <input type="range" min="1" max="\${max}" value="\${max}" oninput="document.getElementById('adk').textContent=this.value" id="adkr">
-     <div style="display:flex;gap:8px;margin-top:14px;">
-       <button class="btn danger" style="flex:1" onclick="doAtk('\${from}','\${to}',+document.getElementById('adkr').value)">ATTACK!</button>
-       <button class="btn" style="flex:1" onclick="closeModal();G.attackSource=null;G.selected=null;renderAll();">Cancel</button>
-     </div>\`);
-}
-
-function doAtk(from,to,nd,silent){
-  if(!silent)closeModal();
-  const ats=G.territories[from],dts=G.territories[to];
-  if(ats.owner!==G.currentPlayer&&!silent)return;
-  const dd=Math.min(2,dts.troops);
-  const ar=Array.from({length:nd},()=>Math.ceil(Math.random()*6)).sort((a,b)=>b-a);
-  const dr=Array.from({length:dd},()=>Math.ceil(Math.random()*6)).sort((a,b)=>b-a);
-  let al=0,dl=0;const res=[];
-  for(let i=0;i<Math.min(nd,dd);i++){ar[i]>dr[i]?(dl++,res.push('a')):(al++,res.push('d'));}
-  ats.troops-=al;dts.troops-=dl;
-  if(!silent)showDice(ar,dr,res);
-  log(\`\${tname(from)} [\${ar.join(',')}] vs \${tname(to)} [\${dr.join(',')}]\`,'combat');
-  log(\`ATK lost \${al}, DEF lost \${dl}\`,'combat');
-  if(dts.troops<=0){
-    const prev=dts.owner,mv=nd-al;
-    dts.owner=G.currentPlayer;dts.troops=Math.max(1,mv);ats.troops=Math.max(1,ats.troops-mv);
-    log(G.players[G.currentPlayer].name+' captured '+tname(to)+'!','capture');
-    if(!Object.values(G.territories).some(t=>t.owner===prev)){
-      G.players[prev].alive=false;log(G.players[prev].name+' eliminated!','capture');
-    }
-    const alive=G.players.filter(p=>p.alive);
-    if(alive.length===1){if(G.gameMode==='online')syncState();showWin(alive[0]);return;}
-  }
-  G.attackSource=null;G.selected=null;
-  if(G.gameMode==='online')syncState();
-  renderAll();updatePhaseUI();
-}
-
-function showDice(ar,dr,res){
-  const area=document.getElementById('dice-display');area.innerHTML='';
-  [[ar,'Attacker','attacker'],[dr,'Defender','defender']].forEach(([rolls,label,cls],ri)=>{
-    const row=document.createElement('div');row.className='dice-row';
-    const lb=document.createElement('span');lb.className='dice-label';lb.textContent=label;row.appendChild(lb);
-    rolls.forEach((v,i)=>{const d=document.createElement('div');d.className='die '+cls;if(i<res.length)d.classList.add(res[i]===(ri===0?'a':'d')?'win':'lose');d.textContent=v;row.appendChild(d);});
-    area.appendChild(row);
-  });
-}
-
-// ── FORTIFY ──
-function showFortModal(from,to){
-  const max=G.territories[from].troops-1,def=Math.max(1,Math.ceil(max/2));
-  showModal('FORTIFY',\`\${tname(from)} → \${tname(to)}\`,
-    \`<div style="text-align:center;margin:10px 0;"><span id="fct" style="font-family:Cinzel;font-size:2rem;color:var(--gold);">\${def}</span><small style="display:block;color:var(--text-dim)">troops to move (max \${max})</small></div>
-     <input type="range" min="1" max="\${max}" value="\${def}" oninput="document.getElementById('fct').textContent=this.value" id="ftr">
-     <div style="display:flex;gap:8px;margin-top:14px;">
-       <button class="btn primary" style="flex:1" onclick="doFort('\${from}','\${to}',+document.getElementById('ftr').value)">MOVE</button>
-       <button class="btn" style="flex:1" onclick="closeModal();G.fortifySource=null;G.selected=null;renderAll();endTurn();">Skip</button>
-     </div>\`);
-}
-
-function doFort(from,to,n){
-  closeModal();G.territories[from].troops-=n;G.territories[to].troops+=n;
-  log(\`\${G.players[G.currentPlayer].name} moved \${n}: \${tname(from)} → \${tname(to)}\`);
-  G.fortifySource=null;G.selected=null;endTurn();
-}
-
-function autoPlace(){
-  if(!isMyTurn())return;
-  const cp=G.currentPlayer,my=TERRITORIES.filter(t=>G.territories[t.id].owner===cp);
-  if(G.phase==='initial-place'){
-    let l=G.players[cp].troopsLeft||0;while(l-->0)G.territories[pick(my).id].troops++;G.players[cp].troopsLeft=0;
-  }else if(G.phase==='place'){
-    let l=G.troopsToPlace;while(l-->0)G.territories[pick(my).id].troops++;G.troopsToPlace=0;
-  }
-  if(G.gameMode==='online')syncState();
-  renderAll();updatePhaseUI();
-}
-
-// ══════════════════════════════════════
-// BOT AI
-// ══════════════════════════════════════
-function maybeBotTurn(){
-  if(G.gameMode!=='bot')return;
-  const cp=G.players[G.currentPlayer];
-  if(!cp||!cp.isBot||botBusy)return;
-  botBusy=true;
-  setTimeout(runBot,700+(rnd(500)));
-}
-
-function runBot(){
-  const pi=G.currentPlayer;
-  if(!G.players[pi]||!G.players[pi].isBot){botBusy=false;return;}
-  const my=TERRITORIES.filter(t=>G.territories[t.id].owner===pi);
-
-  if(G.phase==='initial-place'){
-    // Place on border territories preferentially
-    let l=G.players[pi].troopsLeft||0;
-    while(l-->0){
-      const border=my.filter(t=>ADJ[t.id].some(a=>G.territories[a].owner!==pi));
-      const pool=border.length?border:my;
-      pool.sort((a,b)=>G.territories[a.id].troops-G.territories[b.id].troops);
-      G.territories[pool[0].id].troops++;
-    }
-    G.players[pi].troopsLeft=0;
-    renderAll();updatePhaseUI();botBusy=false;
-    advanceInitial();
-    return;
-  }
-
-  if(G.phase==='place'){
-    let l=G.troopsToPlace;
-    while(l-->0){
-      const border=my.filter(t=>ADJ[t.id].some(a=>G.territories[a].owner!==pi));
-      const pool=border.length?border:my;
-      pool.sort((a,b)=>G.territories[a.id].troops-G.territories[b.id].troops);
-      G.territories[pool[0].id].troops++;
-    }
-    G.troopsToPlace=0;G.phase='attack';G.attackSource=null;G.selected=null;
-    renderAll();updatePhaseUI();
-    setTimeout(botAttack,500);
-    return;
-  }
-
-  if(G.phase==='attack'){botAttack();return;}
-  if(G.phase==='fortify'){botFortify();endTurn();botBusy=false;return;}
-}
-
-function botAttack(){
-  const pi=G.currentPlayer;
-  const attacks=[];
-  TERRITORIES.forEach(t=>{
-    if(G.territories[t.id].owner!==pi||G.territories[t.id].troops<2)return;
-    ADJ[t.id].forEach(a=>{
-      if(G.territories[a].owner!==pi)attacks.push({from:t.id,to:a,ratio:G.territories[t.id].troops/G.territories[a].troops});
-    });
-  });
-  attacks.sort((a,b)=>b.ratio-a.ratio);
-  let done=0;
-  for(const atk of attacks){
-    if(done>=6)break;
-    if(!G.territories[atk.from]||G.territories[atk.from].owner!==pi)continue;
-    if(!G.territories[atk.to]||G.territories[atk.to].owner===pi)continue;
-    if(G.territories[atk.from].troops<2)continue;
-    if(atk.ratio<1.3)continue;
-    doAtk(atk.from,atk.to,Math.min(3,G.territories[atk.from].troops-1),true);
-    done++;
-    if(G.players.filter(p=>p.alive).length===1){botBusy=false;return;}
-  }
-  G.phase='fortify';G.fortifySource=null;G.selected=null;
-  renderAll();updatePhaseUI();
-  setTimeout(()=>{botFortify();endTurn();botBusy=false;},400);
-}
-
-function botFortify(){
-  const pi=G.currentPlayer;
-  const safe=TERRITORIES.filter(t=>G.territories[t.id].owner===pi&&G.territories[t.id].troops>2
-    &&!ADJ[t.id].some(a=>G.territories[a].owner!==pi));
-  for(const t of safe){
-    const front=ADJ[t.id].filter(a=>G.territories[a].owner===pi&&ADJ[a].some(b=>G.territories[b].owner!==pi));
-    if(front.length){
-      const mv=Math.floor((G.territories[t.id].troops-1)/2);
-      if(mv>0){G.territories[t.id].troops-=mv;G.territories[front[0]].troops+=mv;
-        log('General '+PLAYER_NAMES[pi]+' fortified '+tname(front[0]),'bot');break;}
-    }
-  }
-  renderAll();
-}
-
-// ══════════════════════════════════════
-// ONLINE MULTIPLAYER (PeerJS WebRTC)
-// ══════════════════════════════════════
-function genCode(){
-  return Array.from({length:5},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[rnd(32)]).join('');
-}
-
-function createRoom(){
-  isHost=true;
-  myRoomCode=genCode();
-  peer=new Peer(myRoomCode,{debug:0});
-  peer.on('error',e=>{hideWait();notify('PeerJS error: '+e.type+'. Try again.');console.error(e);});
-  peer.on('open',id=>{
-    myRoomCode=id;
-    document.getElementById('waiting-title').textContent='ROOM READY';
-    document.getElementById('waiting-desc').innerHTML=
-      \`Share this code with your friend:<br>
-       <span style="font-family:Cinzel;font-size:2rem;letter-spacing:8px;color:#4a8ae8;display:block;margin:12px 0;">\${id}</span>
-       <span style="color:var(--text-dim);font-size:.75rem;">Waiting for opponent to join...</span>\`;
-    setOnlineBar(id,false);
-    peer.on('connection',c=>{conn=c;wireConn();});
-  });
-}
-
-function joinRoom(code){
-  if(!code||code.length<4){notify('Enter a valid room code');return;}
-  isHost=false;myRoomCode=code;
-  peer=new Peer({debug:0});
-  peer.on('error',e=>{hideWait();notify('Cannot connect: '+e.type);});
-  peer.on('open',()=>{
-    showWait('Joining...','Connecting to room '+code+'...');
-    conn=peer.connect(code,{reliable:true});
-    wireConn();
-  });
-}
-
-function wireConn(){
-  conn.on('open',()=>{
-    hideWait();
-    setOnlineBar(myRoomCode,true);
-    log('Connected to opponent!','online');
-    if(isHost){
-      G.myPlayerIndex=0;
-      document.getElementById('your-label').textContent='YOU: '+PLAYER_NAMES[0];
-      document.getElementById('your-label').style.color=PLAYER_COLORS[0];
-      conn.send({type:'HELLO',guestIdx:1});
-    }
-  });
-  conn.on('data',d=>{
-    if(d.type==='HELLO'){
-      G.myPlayerIndex=d.guestIdx;
-      const c=PLAYER_COLORS[d.guestIdx];
-      document.getElementById('your-label').textContent='YOU: '+PLAYER_NAMES[d.guestIdx];
-      document.getElementById('your-label').style.color=c;
-      conn.send({type:'READY'});
-    }
-    if(d.type==='READY'&&isHost){
-      initGame(2,'online',[]);
-    }
-    if(d.type==='SYNC'){
-      G.territories=d.st.territories;G.phase=d.st.phase;G.currentPlayer=d.st.currentPlayer;
-      G.turn=d.st.turn;G.troopsToPlace=d.st.troopsToPlace;G.players=d.st.players;
-      G.selected=null;G.attackSource=null;G.fortifySource=null;
-      renderAll();updatePhaseUI();
-    }
-  });
-  conn.on('close',()=>{log('Opponent disconnected','online');notify('Opponent disconnected');document.getElementById('conn-dot').classList.remove('connected');});
-  conn.on('error',e=>notify('Conn error: '+e));
-}
-
-function syncState(){
-  if(!conn||!conn.open)return;
-  conn.send({type:'SYNC',st:{
-    territories:G.territories,phase:G.phase,currentPlayer:G.currentPlayer,
-    turn:G.turn,troopsToPlace:G.troopsToPlace,players:G.players,
-  }});
-}
-
-function setOnlineBar(code,connected){
-  const bar=document.getElementById('online-bar');bar.classList.add('show');
-  document.getElementById('room-code-display').textContent='ROOM: '+code;
-  const dot=document.getElementById('conn-dot');
-  if(connected){dot.classList.add('connected');document.getElementById('conn-status').textContent='Connected';}
-}
-
-function copyRoomCode(){
-  navigator.clipboard.writeText(myRoomCode).then(()=>notify('Code copied!'));
-}
-
-// ── SETUP MODAL ──
-function showSetupModal(){
-  let mode='bot',np=2,nbots=1;
-  const render=()=>{
-    document.getElementById('modal-title').textContent='CONQUEST';
-    document.getElementById('modal-desc').innerHTML='Choose your battle:';
-    const ctrl=document.getElementById('modal-controls');ctrl.innerHTML='';
-
-    // Mode cards
-    const mc=document.createElement('div');mc.className='mode-cards';
-    [{id:'local',icon:'🪖',name:'LOCAL',desc:'Hot-seat<br>same device'},
-     {id:'bot',icon:'🤖',name:'VS BOT',desc:'Play vs<br>AI opponents'},
-     {id:'online',icon:'🌐',name:'ONLINE',desc:'Play a friend<br>over internet'}
-    ].forEach(m=>{
-      const c=document.createElement('div');c.className='mode-card'+(mode===m.id?' selected':'');
-      c.innerHTML=\`<div class="mode-icon">\${m.icon}</div><div class="mode-name">\${m.name}</div><div class="mode-desc">\${m.desc}</div>\`;
-      c.onclick=()=>{mode=m.id;render();};mc.appendChild(c);
-    });
-    ctrl.appendChild(mc);
-
-    if(mode==='online'){
-      ctrl.innerHTML+=\`
-        <div class="code-box">
-          <div class="setup-label" style="margin-bottom:8px;">HOST A GAME</div>
-          <button class="btn online-btn" onclick="showWait('Creating Room...','Initializing connection...');createRoom();">Create Room</button>
-        </div>
-        <div class="or-div">OR</div>
-        <div class="code-box">
-          <div class="setup-label" style="margin-bottom:6px;">JOIN A GAME</div>
-          <input class="code-input" id="join-inp" maxlength="5" placeholder="ROOM CODE" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
-          <button class="btn online-btn" style="margin-top:8px;" onclick="joinRoom(document.getElementById('join-inp').value.trim())">Join Room</button>
-        </div>
-        <p style="font-size:.7rem;color:var(--text-dim);margin-top:6px;">Uses WebRTC peer-to-peer — no server needed.<br>You play as Red, friend plays as Blue.</p>
-      \`;
-      // Re-attach mode card listeners (innerHTML clobbered them)
-      ctrl.querySelectorAll('.mode-card').forEach((c,i)=>{
-        const modes=['local','bot','online'];c.onclick=()=>{mode=modes[i];render();};
-      });
-      return;
-    }
-
-    // Player count
-    const pRow=document.createElement('div');
-    pRow.innerHTML=\`<div class="setup-label">PLAYERS</div>\`;
-    const pb=document.createElement('div');pb.className='setup-row';
-    const maxP=mode==='bot'?5:6;
-    for(let n=2;n<=maxP;n++){
-      const b=document.createElement('button');b.className='setup-btn'+(n===np?' selected':'');
-      b.textContent=n+'P';b.onclick=()=>{np=n;if(nbots>=np)nbots=np-1;render();};
-      pb.appendChild(b);
-    }
-    pRow.appendChild(pb);ctrl.appendChild(pRow);
-
-    if(mode==='bot'){
-      const bRow=document.createElement('div');
-      bRow.innerHTML=\`<div class="setup-label" style="margin-top:4px;">AI OPPONENTS <span style="color:var(--text-dim)">(you play as Red)</span></div>\`;
-      const bb=document.createElement('div');bb.className='setup-row';
-      for(let n=1;n<np;n++){
-        const b=document.createElement('button');b.className='setup-btn bot'+(n===nbots?' selected':'');
-        b.textContent=n+' 🤖';b.onclick=()=>{nbots=n;render();};
-        bb.appendChild(b);
+/** BFS: are two territories connected through owned territory? */
+function areConnected(
+  from: string, to: string,
+  territories: Territory[],
+  ownerId: string,
+  tsMap: Map<string, TS>,
+): boolean {
+  const adj = new Map(territories.map(t => [t.id, t.adjacent_ids ?? []]))
+  const visited = new Set<string>([from])
+  const queue = [from]
+  while (queue.length) {
+    const cur = queue.shift()!
+    if (cur === to) return true
+    for (const n of adj.get(cur) ?? []) {
+      if (!visited.has(n) && tsMap.get(n)?.ownerId === ownerId) {
+        visited.add(n)
+        queue.push(n)
       }
-      bRow.appendChild(bb);ctrl.appendChild(bRow);
     }
-
-    const start=document.createElement('button');start.className='btn primary';start.textContent='BEGIN CONQUEST';
-    start.onclick=()=>{
-      if(mode==='bot'){G.myPlayerIndex=0;initGame(np,'bot',Array.from({length:nbots},(_,i)=>i+1));}
-      else initGame(np,'local',[]);
-    };
-    ctrl.appendChild(start);
-  };
-  render();
-  document.getElementById('modal-overlay').classList.add('show');
+  }
+  return false
 }
 
-// ── MODAL ──
-function showModal(title,desc,html){
-  document.getElementById('modal-title').textContent=title;
-  document.getElementById('modal-desc').innerHTML=desc.replace(/\\n/g,'<br>');
-  document.getElementById('modal-controls').innerHTML=html;
-  document.getElementById('modal-overlay').classList.add('show');
-}
-function closeModal(){document.getElementById('modal-overlay').classList.remove('show');}
-function showWait(t,d){
-  document.getElementById('waiting-title').textContent=t||'WAITING';
-  document.getElementById('waiting-desc').innerHTML=d||'';
-  document.getElementById('waiting-overlay').classList.add('show');
-}
-function hideWait(){document.getElementById('waiting-overlay').classList.remove('show');}
-function cancelWaiting(){hideWait();if(peer){peer.destroy();peer=null;}conn=null;showSetupModal();}
-
-// ── LOG ──
-function log(msg,type=''){
-  const el=document.getElementById('log-entries');
-  const d=document.createElement('div');d.className='log-entry'+(type?' '+type:'');d.textContent=msg;
-  el.appendChild(d);el.scrollTop=el.scrollHeight;
-}
-
-// ── TOOLTIP ──
-function showTip(id,e){
-  const ts=G.territories[id],td=TERRITORIES.find(t=>t.id===id),own=ts.owner>=0?G.players[ts.owner]:null;
-  const el=document.getElementById('tooltip');
-  el.innerHTML=\`<strong style="color:\${own?own.color:'#aaa'}">\${td.name}</strong><br>\${CONTINENTS[td.cont].name}<br>Troops: \${ts.troops}<br>\${own?'Owner: '+own.name:'Unclaimed'}\`;
-  el.style.display='block';el.style.left=(e.clientX+14)+'px';el.style.top=(e.clientY-10)+'px';
-}
-
-// ── NOTIFY ──
-let notifT;
-function notify(msg){
-  const el=document.getElementById('notif');el.textContent=msg;el.classList.add('show');
-  clearTimeout(notifT);notifT=setTimeout(()=>el.classList.remove('show'),3500);
-}
-
-// ── WIN ──
-function showWin(p){
-  document.getElementById('win-title').textContent='VICTORY';
-  document.getElementById('win-desc').textContent=p.name+(p.isBot?' (AI)':'')+' has conquered the world!';
-  document.getElementById('win-title').style.color=p.color;
-  document.getElementById('win-overlay').classList.add('show');
-}
-
-// ── BINDINGS ──
-document.getElementById('btn-end-phase').onclick=endPhase;
-document.getElementById('btn-auto-place').onclick=autoPlace;
-document.getElementById('btn-end-turn').onclick=endTurn;
-
-// ── BOOT ──
-showSetupModal();`
-
-export default function GamePage() {
-  const injected = useRef(false)
-
-  useEffect(() => {
-    if (injected.current) return
-    injected.current = true
-
-    function injectGame() {
-      const s = document.createElement('script')
-      s.id = 'conquest-game-js'
-      s.textContent = GAME_JS
-      document.body.appendChild(s)
+function calcDeployArmies(
+  gamePlayerId: string,
+  territories: Territory[],
+  bonusGroups: BonusGroup[],
+  tsMap: Map<string, TS>,
+): number {
+  let owned = 0
+  tsMap.forEach(ts => { if (ts.ownerId === gamePlayerId) owned++ })
+  let bonus = 0
+  for (const bg of bonusGroups) {
+    if (bg.territory_ids.every(tid => tsMap.get(tid)?.ownerId === gamePlayerId)) {
+      bonus += bg.bonus_armies
     }
+  }
+  return Math.max(3, Math.floor(owned / 3)) + bonus
+}
 
-    if ((window as any).Peer) {
-      injectGame()
-      return
-    }
+// ═══════════════════════════════════════════════════════════════════════════════
+// Game Map SVG
+// ═══════════════════════════════════════════════════════════════════════════════
 
-    const peer = document.createElement('script')
-    peer.src = PEERJS_URL
-    peer.onload = injectGame
-    document.head.appendChild(peer)
-  }, [])
+function GameMap({
+  territories, tsMap, playerMap, phase,
+  selectedId, attackFrom, attackTo, fortifyFrom, fortifyTo,
+  myGamePlayerId, isMyTurn,
+  onClick,
+}: {
+  territories: Territory[]
+  tsMap: Map<string, TS>
+  playerMap: Map<string, GP>
+  phase: Phase
+  selectedId: string | null
+  attackFrom: string | null
+  attackTo: string | null
+  fortifyFrom: string | null
+  fortifyTo: string | null
+  myGamePlayerId: string | null
+  isMyTurn: boolean
+  onClick: (id: string) => void
+}) {
+  const viewBox = useMemo(() => computeViewBox(territories), [territories])
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+
+  // Build adjacency set for highlights
+  const attackFromAdj = useMemo(() => {
+    if (!attackFrom) return new Set<string>()
+    const t = territories.find(t => t.id === attackFrom)
+    return new Set(t?.adjacent_ids ?? [])
+  }, [attackFrom, territories])
 
   return (
-    <div style={{ paddingTop: '80px', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      <style dangerouslySetInnerHTML={{ __html: GAME_CSS }} />
-      <div id="online-bar">
-        <div className="conn-dot" id="conn-dot"></div>
-        <span id="conn-status">Connecting...</span>
-        <span id="room-code-display" title="Click to copy"></span>
-        <span id="your-label" style={{marginLeft:'auto',fontSize:'.55rem',color:'var(--text-dim)'}}></span>
-      </div>
-      <div id="conquest-root">
-        <div id="c-header">
-          <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
-            <Link href="/lobby" style={{color:'#c9a84c',opacity:.5,display:'flex',alignItems:'center'}} title="Back to Lobby">
-              <ArrowLeft size={18} />
-            </Link>
-            <h1>CONQUEST <span>GLOBAL DOMINATION</span></h1>
-          </div>
-          <div id="phase-banner"><span className="phase-label" id="phase-label">SETUP</span><span id="turn-label"></span></div>
-          <div id="player-strip"></div>
+    <svg viewBox={viewBox} className="w-full h-full" preserveAspectRatio="xMidYMid meet" style={{ background: '#060810' }}>
+      <defs>
+        <pattern id="gm-water" width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(100,140,200,0.04)" strokeWidth="0.4" />
+        </pattern>
+        <filter id="glow"><feGaussianBlur stdDeviation="2" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+      </defs>
+      <rect x="-9999" y="-9999" width="99999" height="99999" fill="url(#gm-water)" />
+
+      {territories.map(t => {
+        if (!t.polygon || t.polygon.length < 3) return null
+        const ts = tsMap.get(t.id)
+        const owner = ts?.ownerId ? playerMap.get(ts.ownerId) : null
+        const color = owner?.color ?? '#333'
+        const armies = ts?.armies ?? 0
+        const [cx, cy] = t.seed
+        const d = t.polygon.map(([x, y], j) => `${j === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ') + ' Z'
+
+        const isHovered = hoveredId === t.id
+        const isSelected = selectedId === t.id
+        const isAttackFrom = attackFrom === t.id
+        const isAttackTo = attackTo === t.id
+        const isAttackTarget = attackFrom && !attackTo && attackFromAdj.has(t.id) && ts?.ownerId !== tsMap.get(attackFrom)?.ownerId
+        const isFortifyFrom = fortifyFrom === t.id
+        const isFortifyTo = fortifyTo === t.id
+        const isMine = ts?.ownerId === myGamePlayerId
+
+        let strokeColor = 'rgba(0,0,0,0.4)'
+        let strokeWidth = 0.5
+        let opacity = 0.75
+        if (isAttackFrom) { strokeColor = '#FFDD00'; strokeWidth = 2; opacity = 1 }
+        else if (isAttackTo) { strokeColor = '#FF4444'; strokeWidth = 2; opacity = 1 }
+        else if (isAttackTarget) { strokeColor = '#FF6666'; strokeWidth = 1.2; opacity = 0.9 }
+        else if (isFortifyFrom) { strokeColor = '#00FF88'; strokeWidth = 2; opacity = 1 }
+        else if (isFortifyTo) { strokeColor = '#00AAFF'; strokeWidth = 2; opacity = 1 }
+        else if (isSelected) { strokeColor = '#FFFFFF'; strokeWidth = 2; opacity = 1 }
+        else if (isHovered && isMyTurn && isMine) { strokeColor = '#F0D88A'; strokeWidth = 1.2; opacity = 0.9 }
+        else if (isHovered) { opacity = 0.85 }
+
+        return (
+          <g key={t.id}
+            onMouseEnter={() => setHoveredId(t.id)}
+            onMouseLeave={() => setHoveredId(null)}
+            onClick={() => onClick(t.id)}
+            style={{ cursor: isMyTurn ? 'pointer' : 'default' }}
+          >
+            <path d={d} fill={color} fillOpacity={opacity} stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+            {/* Army count badge */}
+            <circle cx={cx} cy={cy} r={5.5} fill="rgba(0,0,0,0.7)" stroke={color} strokeWidth={0.6} />
+            <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+              fontSize={4.5} fontWeight="bold" fontFamily="Cinzel, serif"
+              fill="#fff" style={{ pointerEvents: 'none' }}>
+              {armies}
+            </text>
+            {/* Territory name on hover */}
+            {isHovered && (
+              <text x={cx} y={cy - 9} textAnchor="middle" dominantBaseline="central"
+                fontSize={3.5} fontFamily="Cinzel, serif" fill="rgba(255,255,255,0.9)"
+                style={{ pointerEvents: 'none' }}>
+                {t.name}
+              </text>
+            )}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Page Component
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export default function GamePage() {
+  const { id: rawId } = useParams()
+  const gameId = rawId as string
+  const router = useRouter()
+  const player = useAppStore(s => s.player)
+  const sb = getSupabaseClient()
+
+  // ── Core state ──────────────────────────────────────────────────────────────
+  const [game, setGame] = useState<GameData | null>(null)
+  const [players, setPlayers] = useState<GP[]>([])
+  const [mapTerritories, setMapTerritories] = useState<Territory[]>([])
+  const [bonusGroups, setBonusGroups] = useState<BonusGroup[]>([])
+  const [tsList, setTsList] = useState<TS[]>([])
+  const [events, setEvents] = useState<GameEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // ── Turn / phase state ──────────────────────────────────────────────────────
+  const [phase, setPhase] = useState<Phase>('deploy')
+  const [deployLeft, setDeployLeft] = useState(0)
+  const [attackFrom, setAttackFrom] = useState<string | null>(null)
+  const [attackTo, setAttackTo] = useState<string | null>(null)
+  const [attackDiceCount, setAttackDiceCount] = useState(3)
+  const [fortifyFrom, setFortifyFrom] = useState<string | null>(null)
+  const [fortifyTo, setFortifyTo] = useState<string | null>(null)
+  const [fortifyAmount, setFortifyAmount] = useState(1)
+  const [lastDice, setLastDice] = useState<{ attack_dice: number[]; defend_dice: number[]; attacker_losses: number; defender_losses: number } | null>(null)
+  const [conqueredThisTurn, setConqueredThisTurn] = useState(false)
+  const [actionLock, setActionLock] = useState(false)
+  const botRunning = useRef(false)
+
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const tsMap = useMemo(() => {
+    const m = new Map<string, TS>()
+    tsList.forEach(ts => m.set(ts.territoryId, ts))
+    return m
+  }, [tsList])
+
+  const playerMap = useMemo(() => {
+    const m = new Map<string, GP>()
+    players.forEach(p => m.set(p.id, p))
+    return m
+  }, [players])
+
+  const myGP = players.find(p => p.playerId === player?.id) ?? null
+  const isMyTurn = !!(game?.currentTurnPlayerId && myGP && game.currentTurnPlayerId === myGP.id)
+  const currentTP = game?.currentTurnPlayerId ? playerMap.get(game.currentTurnPlayerId) : null
+  const isCreator = game?.createdBy === player?.id
+
+  // ── Fetch game data ─────────────────────────────────────────────────────────
+  async function fetchAll() {
+    try {
+      setLoading(true)
+
+      const { data: g, error: gErr } = await sb.from('games')
+        .select('id, name, mode, status, max_players, current_players, turn_number, current_turn_player_id, turn_deadline, winner_id, created_by, map_id, settings')
+        .eq('id', gameId).single()
+      if (gErr || !g) throw gErr ?? new Error('Game not found')
+
+      const gd: GameData = {
+        id: g.id, name: g.name, mode: g.mode, status: g.status,
+        maxPlayers: g.max_players, currentPlayers: g.current_players,
+        turnNumber: g.turn_number, currentTurnPlayerId: g.current_turn_player_id,
+        turnDeadline: g.turn_deadline, winnerId: g.winner_id,
+        createdBy: g.created_by, mapId: g.map_id, settings: g.settings,
+      }
+      setGame(gd)
+
+      // Fetch map
+      const { data: mapData } = await sb.from('battle_maps')
+        .select('territories, bonus_groups').eq('id', g.map_id).single()
+      if (mapData) {
+        setMapTerritories(mapData.territories as Territory[])
+        setBonusGroups((mapData.bonus_groups ?? []) as BonusGroup[])
+      }
+
+      // Fetch players
+      await fetchPlayers()
+
+      // Fetch territory states
+      if (gd.status === 'active' || gd.status === 'finished') {
+        const { data: tsData } = await sb.from('territory_states')
+          .select('territory_id, owner_player_id, armies')
+          .eq('game_id', gameId)
+        if (tsData) {
+          setTsList(tsData.map((r: any) => ({ territoryId: r.territory_id, ownerId: r.owner_player_id, armies: r.armies })))
+        }
+      }
+
+      // Fetch events
+      const { data: evData } = await sb.from('game_events')
+        .select('id, event_type, event_data, turn_number, created_at, game_player_id')
+        .eq('game_id', gameId).order('created_at', { ascending: true }).limit(100)
+      if (evData) {
+        setEvents(evData.map((e: any) => ({
+          id: e.id, eventType: e.event_type, eventData: e.event_data,
+          turnNumber: e.turn_number, createdAt: e.created_at, gamePlayerId: e.game_player_id,
+        })))
+      }
+
+      // Auto-join if waiting
+      if (gd.status === 'waiting' && player) {
+        try {
+          await joinGame(gameId, { id: player.id, username: player.username, avatar_url: player.avatar_url })
+          await fetchPlayers()
+          // Re-fetch game (may have started)
+          const { data: g2 } = await sb.from('games')
+            .select('status, current_players, current_turn_player_id, turn_number, turn_deadline')
+            .eq('id', gameId).single()
+          if (g2) {
+            setGame(prev => prev ? { ...prev, status: g2.status, currentPlayers: g2.current_players, currentTurnPlayerId: g2.current_turn_player_id, turnNumber: g2.turn_number, turnDeadline: g2.turn_deadline } : null)
+            if (g2.status === 'active') {
+              const { data: tsData } = await sb.from('territory_states')
+                .select('territory_id, owner_player_id, armies').eq('game_id', gameId)
+              if (tsData) setTsList(tsData.map((r: any) => ({ territoryId: r.territory_id, ownerId: r.owner_player_id, armies: r.armies })))
+            }
+          }
+        } catch { /* already joined or game started */ }
+      }
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to load game')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function fetchPlayers() {
+    const { data: pData } = await sb.from('game_players')
+      .select('id, player_id, username, color, is_ai, turn_order, card_count, is_eliminated')
+      .eq('game_id', gameId).order('turn_order')
+    if (pData) {
+      setPlayers(pData.map((p: any) => ({
+        id: p.id, playerId: p.player_id, username: p.username, color: p.color,
+        isAi: p.is_ai, turnOrder: p.turn_order, cardCount: p.card_count, isEliminated: p.is_eliminated,
+      })))
+    }
+  }
+
+  useEffect(() => { fetchAll() }, [gameId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Calculate deploy armies when turn starts ────────────────────────────────
+  useEffect(() => {
+    if (game?.status === 'active' && isMyTurn && phase === 'deploy' && mapTerritories.length && tsMap.size) {
+      const armies = calcDeployArmies(myGP!.id, mapTerritories, bonusGroups, tsMap)
+      setDeployLeft(armies)
+    }
+  }, [game?.currentTurnPlayerId, game?.turnNumber, phase, tsMap.size]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Realtime subscriptions ──────────────────────────────────────────────────
+  useEffect(() => {
+    const channel = sb.channel(`game-${gameId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'territory_states', filter: `game_id=eq.${gameId}` }, (payload) => {
+        const r = payload.new as any
+        setTsList(prev => {
+          const next = prev.filter(ts => ts.territoryId !== r.territory_id)
+          next.push({ territoryId: r.territory_id, ownerId: r.owner_player_id, armies: r.armies })
+          return next
+        })
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` }, (payload) => {
+        const r = payload.new as any
+        setGame(prev => prev ? {
+          ...prev, status: r.status, currentPlayers: r.current_players,
+          currentTurnPlayerId: r.current_turn_player_id, turnNumber: r.turn_number,
+          turnDeadline: r.turn_deadline, winnerId: r.winner_id,
+        } : null)
+        // Reset phase for new turn
+        setPhase('deploy')
+        setAttackFrom(null); setAttackTo(null)
+        setFortifyFrom(null); setFortifyTo(null)
+        setConqueredThisTurn(false); setLastDice(null)
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_events', filter: `game_id=eq.${gameId}` }, (payload) => {
+        const e = payload.new as any
+        setEvents(prev => [...prev, {
+          id: e.id, eventType: e.event_type, eventData: e.event_data,
+          turnNumber: e.turn_number, createdAt: e.created_at, gamePlayerId: e.game_player_id,
+        }])
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_players', filter: `game_id=eq.${gameId}` }, () => {
+        fetchPlayers()
+      })
+      .subscribe()
+
+    return () => { sb.removeChannel(channel) }
+  }, [gameId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Territory click handler ─────────────────────────────────────────────────
+  const handleTerritoryClick = useCallback((tid: string) => {
+    if (!isMyTurn || actionLock || !myGP) return
+    const ts = tsMap.get(tid)
+    if (!ts) return
+    const isMine = ts.ownerId === myGP.id
+
+    if (phase === 'deploy') {
+      if (!isMine || deployLeft <= 0) return
+      doDeploy(tid)
+    } else if (phase === 'attack') {
+      if (!attackFrom) {
+        // Select source: must own and have 2+ armies
+        if (isMine && ts.armies >= 2) setAttackFrom(tid)
+      } else if (attackFrom === tid) {
+        // Deselect
+        setAttackFrom(null); setAttackTo(null); setLastDice(null)
+      } else if (!attackTo) {
+        // Select target: must be adjacent enemy
+        const src = mapTerritories.find(t => t.id === attackFrom)
+        if (!isMine && src?.adjacent_ids?.includes(tid)) {
+          setAttackTo(tid)
+          setAttackDiceCount(Math.min(3, (tsMap.get(attackFrom)?.armies ?? 2) - 1))
+        }
+      } else if (attackTo === tid) {
+        setAttackTo(null); setLastDice(null)
+      }
+    } else if (phase === 'fortify') {
+      if (!fortifyFrom) {
+        if (isMine && ts.armies >= 2) setFortifyFrom(tid)
+      } else if (fortifyFrom === tid) {
+        setFortifyFrom(null); setFortifyTo(null)
+      } else if (!fortifyTo) {
+        if (isMine && areConnected(fortifyFrom, tid, mapTerritories, myGP.id, tsMap)) {
+          setFortifyTo(tid)
+          setFortifyAmount(1)
+        }
+      } else if (fortifyTo === tid) {
+        setFortifyTo(null)
+      }
+    }
+  }, [isMyTurn, actionLock, myGP, phase, deployLeft, attackFrom, attackTo, fortifyFrom, fortifyTo, tsMap, mapTerritories]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Deploy action ───────────────────────────────────────────────────────────
+  async function doDeploy(tid: string) {
+    setActionLock(true)
+    try {
+      const ts = tsMap.get(tid)!
+      await sb.from('territory_states')
+        .update({ armies: ts.armies + 1 })
+        .eq('game_id', gameId).eq('territory_id', tid)
+      setTsList(prev => prev.map(t => t.territoryId === tid ? { ...t, armies: t.armies + 1 } : t))
+      const newLeft = deployLeft - 1
+      setDeployLeft(newLeft)
+
+      await sb.from('game_events').insert({
+        game_id: gameId, game_player_id: myGP!.id, event_type: 'deploy', turn_number: game!.turnNumber,
+        event_data: { territory_id: tid, armies_placed: 1 },
+      })
+
+      if (newLeft <= 0) setPhase('attack')
+    } finally { setActionLock(false) }
+  }
+
+  // ── Attack action ───────────────────────────────────────────────────────────
+  async function doAttack() {
+    if (!attackFrom || !attackTo || actionLock) return
+    setActionLock(true)
+    try {
+      const srcTs = tsMap.get(attackFrom)!
+      const tgtTs = tsMap.get(attackTo)!
+      const atkCount = Math.min(attackDiceCount, srcTs.armies - 1)
+      const defCount = Math.min(2, tgtTs.armies)
+
+      const { data: dice, error: dErr } = await sb.rpc('roll_dice', { attack_count: atkCount, defend_count: defCount })
+      if (dErr) throw dErr
+      setLastDice(dice)
+
+      const newSrcArmies = srcTs.armies - dice.attacker_losses
+      const newTgtArmies = tgtTs.armies - dice.defender_losses
+
+      if (newTgtArmies <= 0) {
+        // Territory conquered!
+        const moveArmies = atkCount // move attacking dice count
+        await Promise.all([
+          sb.from('territory_states').update({ armies: newSrcArmies - moveArmies }).eq('game_id', gameId).eq('territory_id', attackFrom),
+          sb.from('territory_states').update({ owner_player_id: myGP!.id, armies: moveArmies }).eq('game_id', gameId).eq('territory_id', attackTo),
+        ])
+        setTsList(prev => prev.map(t => {
+          if (t.territoryId === attackFrom) return { ...t, armies: newSrcArmies - moveArmies }
+          if (t.territoryId === attackTo) return { ...t, ownerId: myGP!.id, armies: moveArmies }
+          return t
+        }))
+        setConqueredThisTurn(true)
+
+        // Check if defender eliminated
+        const defenderId = tgtTs.ownerId
+        const defenderStillHas = tsList.filter(ts => ts.ownerId === defenderId && ts.territoryId !== attackTo).length
+        if (defenderStillHas === 0 && defenderId) {
+          await sb.from('game_players').update({ is_eliminated: true, eliminated_at: new Date().toISOString() })
+            .eq('game_id', gameId).eq('id', defenderId)
+        }
+
+        // Check win (all territories owned)
+        const totalTerritories = mapTerritories.length
+        const myTerritories = tsList.filter(ts => ts.ownerId === myGP!.id).length + 1 // +1 for just conquered
+        if (myTerritories >= totalTerritories) {
+          await sb.from('games').update({ status: 'finished', winner_id: myGP!.playerId }).eq('id', gameId)
+          await sb.from('game_events').insert({
+            game_id: gameId, game_player_id: myGP!.id, event_type: 'win', turn_number: game!.turnNumber,
+            event_data: { winner_player_id: myGP!.playerId },
+          })
+        }
+
+        setAttackFrom(null); setAttackTo(null)
+      } else {
+        // Update armies
+        await Promise.all([
+          sb.from('territory_states').update({ armies: newSrcArmies }).eq('game_id', gameId).eq('territory_id', attackFrom),
+          sb.from('territory_states').update({ armies: newTgtArmies }).eq('game_id', gameId).eq('territory_id', attackTo),
+        ])
+        setTsList(prev => prev.map(t => {
+          if (t.territoryId === attackFrom) return { ...t, armies: newSrcArmies }
+          if (t.territoryId === attackTo) return { ...t, armies: newTgtArmies }
+          return t
+        }))
+        // Update dice count for next roll
+        setAttackDiceCount(Math.min(3, newSrcArmies - 1))
+        if (newSrcArmies <= 1) { setAttackFrom(null); setAttackTo(null) }
+      }
+
+      await sb.from('game_events').insert({
+        game_id: gameId, game_player_id: myGP!.id, event_type: 'attack', turn_number: game!.turnNumber,
+        event_data: { from: attackFrom, to: attackTo, ...dice, conquered: newTgtArmies <= 0 },
+      })
+    } finally { setActionLock(false) }
+  }
+
+  // ── Fortify action ──────────────────────────────────────────────────────────
+  async function doFortify() {
+    if (!fortifyFrom || !fortifyTo || actionLock) return
+    setActionLock(true)
+    try {
+      const src = tsMap.get(fortifyFrom)!
+      const tgt = tsMap.get(fortifyTo)!
+      const amt = Math.min(fortifyAmount, src.armies - 1)
+      await Promise.all([
+        sb.from('territory_states').update({ armies: src.armies - amt }).eq('game_id', gameId).eq('territory_id', fortifyFrom),
+        sb.from('territory_states').update({ armies: tgt.armies + amt }).eq('game_id', gameId).eq('territory_id', fortifyTo),
+      ])
+      setTsList(prev => prev.map(t => {
+        if (t.territoryId === fortifyFrom) return { ...t, armies: t.armies - amt }
+        if (t.territoryId === fortifyTo) return { ...t, armies: t.armies + amt }
+        return t
+      }))
+      await sb.from('game_events').insert({
+        game_id: gameId, game_player_id: myGP!.id, event_type: 'fortify', turn_number: game!.turnNumber,
+        event_data: { from: fortifyFrom, to: fortifyTo, armies_moved: amt },
+      })
+      // End turn after fortify
+      await advanceTurn()
+    } finally { setActionLock(false) }
+  }
+
+  // ── End turn / advance ──────────────────────────────────────────────────────
+  async function advanceTurn() {
+    if (!game) return
+    const activePlayers = players.filter(p => !p.isEliminated).sort((a, b) => a.turnOrder - b.turnOrder)
+    const currentIdx = activePlayers.findIndex(p => p.id === game.currentTurnPlayerId)
+    const nextPlayer = activePlayers[(currentIdx + 1) % activePlayers.length]
+
+    const deadlineMs = game.mode === 'lightning' ? 60_000 : game.mode === 'slow_hour' ? 3_600_000 : 86_400_000
+    await sb.from('games').update({
+      current_turn_player_id: nextPlayer.id,
+      turn_number: game.turnNumber + 1,
+      turn_deadline: new Date(Date.now() + deadlineMs).toISOString(),
+    }).eq('id', gameId)
+
+    setPhase('deploy')
+    setAttackFrom(null); setAttackTo(null)
+    setFortifyFrom(null); setFortifyTo(null)
+    setConqueredThisTurn(false); setLastDice(null)
+  }
+
+  async function skipToFortify() {
+    setPhase('fortify')
+    setAttackFrom(null); setAttackTo(null); setLastDice(null)
+  }
+
+  async function skipFortifyEndTurn() {
+    await advanceTurn()
+  }
+
+  // ── Bot AI ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!game || game.status !== 'active' || !isCreator || !currentTP?.isAi || botRunning.current) return
+
+    const timer = setTimeout(async () => {
+      if (botRunning.current) return
+      botRunning.current = true
+      try {
+        await runBotTurn(currentTP.id)
+      } catch (e) { console.error('Bot error:', e) }
+      finally { botRunning.current = false }
+    }, 1200)
+
+    return () => clearTimeout(timer)
+  }, [game?.currentTurnPlayerId, game?.turnNumber, game?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function runBotTurn(botId: string) {
+    // Deploy: place armies on border territories
+    const deployCount = calcDeployArmies(botId, mapTerritories, bonusGroups, tsMap)
+    const myTs = tsList.filter(ts => ts.ownerId === botId)
+    const borders = myTs.filter(ts => {
+      const t = mapTerritories.find(mt => mt.id === ts.territoryId)
+      return t?.adjacent_ids?.some(aid => tsMap.get(aid)?.ownerId !== botId)
+    })
+    const targets = borders.length > 0 ? borders : myTs
+    for (let i = 0; i < deployCount; i++) {
+      const pick = targets[Math.floor(Math.random() * targets.length)]
+      await sb.from('territory_states').update({ armies: (tsMap.get(pick.territoryId)?.armies ?? 1) + 1 })
+        .eq('game_id', gameId).eq('territory_id', pick.territoryId)
+      pick.armies = (pick.armies || 1) + 1
+      // Also update tsMap locally
+      setTsList(prev => prev.map(t => t.territoryId === pick.territoryId ? { ...t, armies: pick.armies } : t))
+      await new Promise(r => setTimeout(r, 200))
+    }
+
+    // Attack: up to 5 attacks with advantage
+    for (let atk = 0; atk < 5; atk++) {
+      // Re-read state
+      const { data: freshTs } = await sb.from('territory_states')
+        .select('territory_id, owner_player_id, armies').eq('game_id', gameId)
+      if (!freshTs) break
+      const freshMap = new Map(freshTs.map((r: any) => [r.territory_id, { territoryId: r.territory_id, ownerId: r.owner_player_id, armies: r.armies }]))
+
+      // Find best attack
+      let bestSrc: string | null = null, bestTgt: string | null = null, bestAdv = 0
+      for (const ts of freshTs) {
+        if (ts.owner_player_id !== botId || ts.armies < 3) continue
+        const terr = mapTerritories.find(t => t.id === ts.territory_id)
+        for (const adj of terr?.adjacent_ids ?? []) {
+          const enemy = freshMap.get(adj)
+          if (enemy && enemy.ownerId !== botId) {
+            const advantage = ts.armies - enemy.armies
+            if (advantage > bestAdv) { bestAdv = advantage; bestSrc = ts.territory_id; bestTgt = adj }
+          }
+        }
+      }
+      if (!bestSrc || !bestTgt || bestAdv < 1) break
+
+      const srcArmies = freshMap.get(bestSrc)!.armies
+      const tgtArmies = freshMap.get(bestTgt)!.armies
+      const atkCount = Math.min(3, srcArmies - 1)
+      const defCount = Math.min(2, tgtArmies)
+
+      const { data: dice } = await sb.rpc('roll_dice', { attack_count: atkCount, defend_count: defCount })
+      if (!dice) break
+
+      const newSrc = srcArmies - dice.attacker_losses
+      const newTgt = tgtArmies - dice.defender_losses
+
+      if (newTgt <= 0) {
+        const move = atkCount
+        await Promise.all([
+          sb.from('territory_states').update({ armies: newSrc - move }).eq('game_id', gameId).eq('territory_id', bestSrc),
+          sb.from('territory_states').update({ owner_player_id: botId, armies: move }).eq('game_id', gameId).eq('territory_id', bestTgt),
+        ])
+        // Check elimination
+        const defender = freshMap.get(bestTgt)!.ownerId
+        const defLeft = freshTs.filter(t => t.owner_player_id === defender && t.territory_id !== bestTgt).length
+        if (defLeft === 0 && defender) {
+          await sb.from('game_players').update({ is_eliminated: true }).eq('game_id', gameId).eq('id', defender)
+        }
+        // Check win
+        const botOwns = freshTs.filter(t => t.owner_player_id === botId).length + 1
+        if (botOwns >= mapTerritories.length) {
+          const botPlayer = players.find(p => p.id === botId)
+          await sb.from('games').update({ status: 'finished', winner_id: botPlayer?.playerId ?? null }).eq('id', gameId)
+          return
+        }
+      } else {
+        await Promise.all([
+          sb.from('territory_states').update({ armies: newSrc }).eq('game_id', gameId).eq('territory_id', bestSrc),
+          sb.from('territory_states').update({ armies: newTgt }).eq('game_id', gameId).eq('territory_id', bestTgt),
+        ])
+      }
+
+      await sb.from('game_events').insert({
+        game_id: gameId, game_player_id: botId, event_type: 'attack', turn_number: game!.turnNumber,
+        event_data: { from: bestSrc, to: bestTgt, ...dice, conquered: newTgt <= 0 },
+      })
+      await new Promise(r => setTimeout(r, 600))
+    }
+
+    // End bot turn
+    const activePlayers = players.filter(p => !p.isEliminated).sort((a, b) => a.turnOrder - b.turnOrder)
+    const curIdx = activePlayers.findIndex(p => p.id === botId)
+    const nextP = activePlayers[(curIdx + 1) % activePlayers.length]
+    const deadlineMs = game!.mode === 'lightning' ? 60_000 : game!.mode === 'slow_hour' ? 3_600_000 : 86_400_000
+    await sb.from('games').update({
+      current_turn_player_id: nextP.id,
+      turn_number: game!.turnNumber + 1,
+      turn_deadline: new Date(Date.now() + deadlineMs).toISOString(),
+    }).eq('id', gameId)
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════════
+  // Render
+  // ═════════════════════════════════════════════════════════════════════════════
+
+  if (loading) {
+    return (
+      <div className="h-screen bg-crusader-void flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-full border-2 border-crusader-gold/30 border-t-crusader-gold animate-spin" />
+          <p className="text-crusader-gold/60 font-cinzel text-sm tracking-widest">Loading Battle...</p>
         </div>
-        <div id="main">
-          <div id="sidebar">
-            <div className="sidebar-section">
-              <h3>Reinforcements</h3>
-              <div id="troop-info"><span id="troops-to-place">0</span><small>TROOPS TO PLACE</small></div>
-            </div>
-            <div className="sidebar-section"><h3>Continents</h3><div id="continents-list"></div></div>
-            <div className="sidebar-section" id="selected-info">
-              <h3>Selected</h3>
-              <div id="sel-name"></div>
-              <div id="sel-troops" style={{fontSize:'.82rem',color:'var(--text-dim)'}}></div>
-              <div id="sel-owner" style={{fontSize:'.72rem',color:'var(--text-dim)',marginTop:'3px'}}></div>
-            </div>
-            <div id="actions">
-              <button className="btn primary" id="btn-end-phase">End Placement</button>
-              <button className="btn" id="btn-auto-place" style={{display:'none'}}>Auto-Place</button>
-              <button className="btn danger" id="btn-end-turn" style={{display:'none'}}>End Turn</button>
-            </div>
-            <div className="sidebar-section" style={{flex:1}}>
-              <h3>Instructions</h3>
-              <div id="instructions" style={{fontSize:'.75rem',color:'var(--text-dim)',lineHeight:1.7}}></div>
-            </div>
-          </div>
-          <div id="map-container">
-            <svg id="map-svg" viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="waves" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M0,20 Q10,15 20,20 Q30,25 40,20" fill="none" stroke="rgba(255,255,255,.03)" strokeWidth="1"/>
-                </pattern>
-              </defs>
-              <rect width="900" height="520" fill="#0e1f30"/>
-              <rect width="900" height="520" fill="url(#waves)"/>
-            </svg>
-          </div>
-          <div id="log-panel">
-            <h3>BATTLE LOG</h3>
-            <div id="log-entries"></div>
-            <div id="dice-area"><h4>DICE</h4><div id="dice-display"></div></div>
-          </div>
+      </div>
+    )
+  }
+
+  if (error || !game) {
+    return (
+      <div className="h-screen bg-crusader-void flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 font-cinzel mb-4">{error ?? 'Game not found'}</p>
+          <Link href="/lobby"><Button variant="outline" icon={<ArrowLeft size={14} />}>Back to Lobby</Button></Link>
         </div>
       </div>
-      <div id="modal-overlay">
-        <div id="modal-box">
-          <h2 id="modal-title">CONQUEST</h2>
-          <p id="modal-desc"></p>
-          <div className="modal-controls" id="modal-controls"></div>
+    )
+  }
+
+  // ── Waiting Room ────────────────────────────────────────────────────────────
+  if (game.status === 'waiting') {
+    return (
+      <div className="h-screen bg-crusader-void flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-12 h-12 mx-auto mb-6 rounded-full border-2 border-crusader-gold/30 border-t-crusader-gold animate-spin" />
+          <h1 className="font-cinzel text-2xl font-bold text-crusader-gold mb-2">{game.name}</h1>
+          <p className="text-crusader-gold/50 font-cinzel text-sm tracking-widest mb-8">WAITING FOR PLAYERS</p>
+          <div className="flex justify-center gap-3 mb-8">
+            {players.map(p => (
+              <div key={p.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-crusader-gold/20" style={{ borderColor: p.color + '40' }}>
+                <div className="w-3 h-3 rounded-full" style={{ background: p.color }} />
+                <span className="text-sm font-cinzel text-crusader-gold/80">{p.username}</span>
+                {p.isAi && <span className="text-[9px] uppercase text-crusader-gold/40 border border-crusader-gold/20 px-1 rounded">AI</span>}
+              </div>
+            ))}
+            {Array.from({ length: game.maxPlayers - players.length }).map((_, i) => (
+              <div key={`empty-${i}`} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-crusader-gold/10">
+                <div className="w-3 h-3 rounded-full border border-crusader-gold/20" />
+                <span className="text-sm font-cinzel text-crusader-gold/20">Open</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-crusader-gold/30 text-xs font-cinzel">
+            {game.currentPlayers}/{game.maxPlayers} players · Game starts when full
+          </p>
+          <Link href="/lobby" className="inline-block mt-6">
+            <Button variant="outline" size="sm" icon={<ArrowLeft size={12} />}>Back to Lobby</Button>
+          </Link>
         </div>
       </div>
-      <div id="waiting-overlay">
-        <div className="spinner"></div>
-        <h2 id="waiting-title">WAITING</h2>
-        <p id="waiting-desc">Please wait...</p>
-        <button className="btn" style={{width:'180px',marginTop:'6px'}} onClick={() => { const el = document.getElementById('waiting-overlay'); if(el) el.classList.remove('show'); if((window as any).peer){(window as any).peer.destroy();(window as any).peer=null;} (window as any).showSetupModal && (window as any).showSetupModal(); }}>Cancel</button>
+    )
+  }
+
+  // ── Finished ────────────────────────────────────────────────────────────────
+  if (game.status === 'finished') {
+    const winner = players.find(p => p.playerId === game.winnerId || p.id === game.winnerId)
+    return (
+      <div className="h-screen bg-crusader-void flex flex-col">
+        <main className="flex-1 flex pt-20">
+          <div className="flex-1 relative">
+            <GameMap territories={mapTerritories} tsMap={tsMap} playerMap={playerMap}
+              phase="deploy" selectedId={null} attackFrom={null} attackTo={null}
+              fortifyFrom={null} fortifyTo={null} myGamePlayerId={myGP?.id ?? null}
+              isMyTurn={false} onClick={() => {}} />
+            {/* Victory overlay */}
+            <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+              <div className="text-center">
+                <Crown size={64} className="mx-auto mb-4" style={{ color: winner?.color ?? '#C9A84C' }} />
+                <h1 className="font-cinzel text-4xl font-bold tracking-[6px] mb-2" style={{ color: winner?.color ?? '#C9A84C' }}>
+                  VICTORY
+                </h1>
+                <p className="font-cinzel text-xl text-crusader-gold/70 mb-8">{winner?.username ?? 'Unknown'} has conquered the world!</p>
+                <Link href="/lobby"><Button icon={<Sword size={16} />}>Play Again</Button></Link>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
-      <div id="notif"></div>
-      <div id="win-overlay">
-        <h1 id="win-title">VICTORY</h1>
-        <p id="win-desc"></p>
-        <button className="btn primary" style={{width:'200px'}} onClick={() => (window as any).showSetupModal && (window as any).showSetupModal()}>NEW GAME</button>
+    )
+  }
+
+  // ── Active Game ─────────────────────────────────────────────────────────────
+  const maxAttackDice = attackFrom ? Math.min(3, (tsMap.get(attackFrom)?.armies ?? 2) - 1) : 1
+  const maxFortifyAmt = fortifyFrom ? (tsMap.get(fortifyFrom)?.armies ?? 1) - 1 : 0
+
+  return (
+    <div className="h-screen bg-crusader-void flex flex-col overflow-hidden">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="shrink-0 h-12 mt-20 flex items-center justify-between px-5 border-b border-crusader-gold/10" style={{ background: 'rgba(8,6,4,0.90)' }}>
+        <div className="flex items-center gap-4">
+          <Link href="/lobby" className="text-crusader-gold/30 hover:text-crusader-gold transition-colors"><ArrowLeft size={16} /></Link>
+          <h1 className="font-cinzel text-sm font-bold text-crusader-gold tracking-widest">{game.name}</h1>
+          <span className="text-[10px] font-cinzel text-crusader-gold/30 tracking-wider">TURN {game.turnNumber}</span>
+        </div>
+
+        {/* Player strip */}
+        <div className="flex items-center gap-2">
+          {players.filter(p => !p.isEliminated).map(p => {
+            const isCurrent = p.id === game.currentTurnPlayerId
+            const tCount = tsList.filter(ts => ts.ownerId === p.id).length
+            return (
+              <div key={p.id} className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-cinzel tracking-wide border transition-all ${
+                isCurrent ? 'border-current opacity-100 shadow-[0_0_8px_currentColor]' : 'border-transparent opacity-40'
+              }`} style={{ color: p.color, borderColor: isCurrent ? p.color : 'transparent' }}>
+                <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+                <span>{p.username}</span>
+                <span className="opacity-50">{tCount}t</span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Phase indicator */}
+        <div className="flex items-center gap-2">
+          {isMyTurn && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-crusader-gold/40 bg-crusader-gold/10">
+              {phase === 'deploy' && <Shield size={11} className="text-crusader-gold" />}
+              {phase === 'attack' && <Crosshair size={11} className="text-red-400" />}
+              {phase === 'fortify' && <ArrowRightLeft size={11} className="text-blue-400" />}
+              <span className="text-[10px] font-cinzel tracking-wider text-crusader-gold">
+                {phase === 'deploy' ? `DEPLOY (${deployLeft})` : phase === 'attack' ? 'ATTACK' : 'FORTIFY'}
+              </span>
+            </div>
+          )}
+          {!isMyTurn && currentTP && (
+            <span className="text-[10px] font-cinzel text-crusader-gold/40 tracking-wider">
+              {currentTP.username}&apos;s turn{currentTP.isAi ? ' (AI)' : ''}
+            </span>
+          )}
+        </div>
       </div>
-      <div id="tooltip"></div>
+
+      {/* ── Main ───────────────────────────────────────────────────────────── */}
+      <main className="flex-1 flex overflow-hidden">
+        {/* Map */}
+        <div className="flex-1 relative">
+          <GameMap
+            territories={mapTerritories} tsMap={tsMap} playerMap={playerMap}
+            phase={phase} selectedId={null}
+            attackFrom={attackFrom} attackTo={attackTo}
+            fortifyFrom={fortifyFrom} fortifyTo={fortifyTo}
+            myGamePlayerId={myGP?.id ?? null} isMyTurn={isMyTurn}
+            onClick={handleTerritoryClick}
+          />
+        </div>
+
+        {/* ── Right sidebar ──────────────────────────────────────────────── */}
+        <div className="w-72 flex flex-col border-l border-crusader-gold/10 overflow-hidden" style={{ background: 'rgba(6,5,3,0.92)' }}>
+
+          {/* Action panel */}
+          {isMyTurn && (
+            <div className="shrink-0 p-4 border-b border-crusader-gold/10 space-y-3">
+              {phase === 'deploy' && (
+                <div className="text-center">
+                  <p className="font-cinzel text-xs text-crusader-gold/60 mb-1">Click your territories to deploy</p>
+                  <p className="font-cinzel text-2xl font-bold text-crusader-gold">{deployLeft}</p>
+                  <p className="font-cinzel text-[10px] text-crusader-gold/35 tracking-widest">ARMIES REMAINING</p>
+                </div>
+              )}
+
+              {phase === 'attack' && (
+                <>
+                  {!attackFrom && (
+                    <p className="font-cinzel text-xs text-crusader-gold/60 text-center">Select a territory to attack from (2+ armies)</p>
+                  )}
+                  {attackFrom && !attackTo && (
+                    <p className="font-cinzel text-xs text-red-400/70 text-center">Select an adjacent enemy territory</p>
+                  )}
+                  {attackFrom && attackTo && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs font-cinzel">
+                        <span className="text-crusader-gold/60">Attack dice:</span>
+                        <div className="flex gap-1">
+                          {[1, 2, 3].map(n => (
+                            <button key={n} disabled={n > maxAttackDice}
+                              onClick={() => setAttackDiceCount(n)}
+                              className={`w-7 h-7 rounded border text-xs font-bold transition-all ${
+                                attackDiceCount === n ? 'border-red-400 bg-red-400/20 text-red-400' : 'border-crusader-gold/20 text-crusader-gold/40'
+                              } ${n > maxAttackDice ? 'opacity-20' : ''}`}>
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <Button fullWidth size="sm" onClick={doAttack} loading={actionLock}
+                        icon={<Dices size={14} />} className="!bg-red-900/30 !border-red-400/40 hover:!bg-red-900/50 !text-red-300">
+                        Roll Attack
+                      </Button>
+                    </div>
+                  )}
+                  {/* Dice result */}
+                  {lastDice && (
+                    <div className="bg-crusader-void/50 rounded-lg p-3 border border-crusader-gold/10 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-1">
+                          {lastDice.attack_dice.sort((a: number, b: number) => b - a).map((d: number, i: number) => (
+                            <div key={i} className="w-6 h-6 rounded bg-red-700 text-white text-xs font-bold flex items-center justify-center">{d}</div>
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-crusader-gold/30 font-cinzel">vs</span>
+                        <div className="flex gap-1">
+                          {lastDice.defend_dice.sort((a: number, b: number) => b - a).map((d: number, i: number) => (
+                            <div key={i} className="w-6 h-6 rounded bg-blue-700 text-white text-xs font-bold flex items-center justify-center">{d}</div>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-[10px] font-cinzel text-crusader-gold/50 text-center">
+                        Attacker lost {lastDice.attacker_losses} · Defender lost {lastDice.defender_losses}
+                      </p>
+                    </div>
+                  )}
+                  <Button fullWidth size="sm" variant="outline" onClick={skipToFortify}>
+                    Done Attacking
+                  </Button>
+                </>
+              )}
+
+              {phase === 'fortify' && (
+                <>
+                  {!fortifyFrom && (
+                    <p className="font-cinzel text-xs text-crusader-gold/60 text-center">Select a territory to move armies from</p>
+                  )}
+                  {fortifyFrom && !fortifyTo && (
+                    <p className="font-cinzel text-xs text-blue-400/70 text-center">Select a connected territory to move to</p>
+                  )}
+                  {fortifyFrom && fortifyTo && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs font-cinzel">
+                        <span className="text-crusader-gold/60">Move armies:</span>
+                        <div className="flex items-center gap-2">
+                          <input type="range" min={1} max={maxFortifyAmt} value={fortifyAmount}
+                            onChange={e => setFortifyAmount(Number(e.target.value))}
+                            className="w-20 accent-blue-400" />
+                          <span className="text-blue-400 font-bold w-5 text-right">{fortifyAmount}</span>
+                        </div>
+                      </div>
+                      <Button fullWidth size="sm" onClick={doFortify} loading={actionLock}
+                        icon={<ArrowRightLeft size={14} />} className="!border-blue-400/40 !text-blue-300">
+                        Fortify &amp; End Turn
+                      </Button>
+                    </div>
+                  )}
+                  <Button fullWidth size="sm" variant="outline" onClick={skipFortifyEndTurn}>
+                    Skip &amp; End Turn
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Player stats */}
+          <div className="shrink-0 p-4 border-b border-crusader-gold/10">
+            <h3 className="font-cinzel text-[10px] text-crusader-gold/35 tracking-[0.2em] uppercase mb-2">COMMANDERS</h3>
+            <div className="space-y-1.5">
+              {players.map(p => {
+                const tCount = tsList.filter(ts => ts.ownerId === p.id).length
+                const aCount = tsList.filter(ts => ts.ownerId === p.id).reduce((s, ts) => s + ts.armies, 0)
+                const isCurrent = p.id === game.currentTurnPlayerId
+                return (
+                  <div key={p.id} className={`flex items-center gap-2 px-2 py-1.5 rounded transition-all ${
+                    p.isEliminated ? 'opacity-25 line-through' : isCurrent ? 'bg-crusader-gold/5' : ''
+                  }`}>
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color, boxShadow: isCurrent ? `0 0 6px ${p.color}` : 'none' }} />
+                    <span className="text-[11px] font-cinzel text-crusader-gold/70 flex-1 truncate">{p.username}</span>
+                    {p.isAi && <span className="text-[8px] uppercase text-crusader-gold/25 border border-crusader-gold/10 px-1 rounded">AI</span>}
+                    <span className="text-[10px] text-crusader-gold/30 font-cinzel">{tCount}t · {aCount}a</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Bonus groups */}
+          {bonusGroups.length > 0 && (
+            <div className="shrink-0 p-4 border-b border-crusader-gold/10">
+              <h3 className="font-cinzel text-[10px] text-crusader-gold/35 tracking-[0.2em] uppercase mb-2">BONUS REGIONS</h3>
+              <div className="space-y-1">
+                {bonusGroups.map(bg => {
+                  const owned = myGP ? bg.territory_ids.filter(tid => tsMap.get(tid)?.ownerId === myGP.id).length : 0
+                  return (
+                    <div key={bg.id} className="flex items-center justify-between text-[10px] font-cinzel">
+                      <span className="text-crusader-gold/50 truncate flex-1">{bg.name}</span>
+                      <span className={owned === bg.territory_ids.length ? 'text-crusader-gold font-bold' : 'text-crusader-gold/25'}>
+                        {owned}/{bg.territory_ids.length} · +{bg.bonus_armies}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Event log */}
+          <div className="flex-1 overflow-y-auto p-4 scrollbar-none min-h-0">
+            <h3 className="font-cinzel text-[10px] text-crusader-gold/35 tracking-[0.2em] uppercase mb-2">BATTLE LOG</h3>
+            <div className="space-y-1">
+              {events.slice(-30).reverse().map(ev => {
+                const pName = ev.gamePlayerId ? playerMap.get(ev.gamePlayerId)?.username ?? '?' : 'System'
+                let text = ''
+                if (ev.eventType === 'start') text = 'Game started!'
+                else if (ev.eventType === 'deploy') text = `${pName} deployed to ${ev.eventData?.territory_id}`
+                else if (ev.eventType === 'attack') text = `${pName} attacked ${ev.eventData?.to} from ${ev.eventData?.from}${ev.eventData?.conquered ? ' — CONQUERED!' : ''}`
+                else if (ev.eventType === 'fortify') text = `${pName} fortified ${ev.eventData?.to}`
+                else if (ev.eventType === 'win') text = `${pName} wins the game!`
+                else text = `${pName}: ${ev.eventType}`
+                return (
+                  <div key={ev.id} className={`text-[10px] font-cinzel leading-relaxed ${
+                    ev.eventType === 'attack' ? (ev.eventData?.conquered ? 'text-crusader-gold/70' : 'text-red-400/50')
+                    : ev.eventType === 'win' ? 'text-crusader-gold'
+                    : 'text-crusader-gold/35'
+                  }`}>
+                    {text}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   )
 }
