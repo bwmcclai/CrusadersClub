@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import ZoneCartogram from '@/components/map/ZoneCartogram'
 
-// ─── Dynamic import (Three.js SSR guard) ──────────────────────────────────────
+// --- Dynamic import (Three.js SSR guard) --------------------------------------
 
 const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), {
   ssr: false,
@@ -36,7 +36,7 @@ const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), {
   ),
 })
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// --- Types ---------------------------------------------------------------------
 
 type MapMode = 'continent' | 'country' | 'province'
 type AppView = 'globe' | 'preview'
@@ -46,7 +46,7 @@ interface MapMeta {
   desc: string
 }
 
-// ─── Zoom Thresholds ──────────────────────────────────────────────────────────
+// --- Zoom Thresholds ----------------------------------------------------------
 
 const CONTINENT_ZOOM = 3.8
 const COUNTRY_ZOOM = 2.5
@@ -57,10 +57,12 @@ function getModeFromZoom(d: number): MapMode {
   return 'province'
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 
 function computeRegionBounds(features: GeoJSON.Feature[]) {
-  let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180
+  let minLat = 90, maxLat = -90
+  const allLons: number[] = []
+
   for (const feat of features) {
     const geo = feat.geometry
     if (!geo) continue
@@ -70,13 +72,33 @@ function computeRegionBounds(features: GeoJSON.Feature[]) {
     for (const ring of coords)
       for (const [lon, lat] of ring) {
         minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat)
-        minLon = Math.min(minLon, lon); maxLon = Math.max(maxLon, lon)
+        allLons.push(lon)
       }
   }
+
+  let minLon = Math.min(...allLons)
+  let maxLon = Math.max(...allLons)
+
+  // Fix antimeridian-crossing bounds: GeoJSON stores some regions (e.g. Alaska's
+  // Aleutian Islands) at positive longitudes past 90°E even though the country is
+  // primarily in the western hemisphere. This causes the naive centre to land on
+  // the wrong side of the globe (e.g. the USA centres on West Africa instead of
+  // the continental US). Detect and normalise these cases.
+  if (maxLon - minLon > 180 && maxLon > 90 && minLon < 0) {
+    const negCount = allLons.filter(l => l < 0).length
+    if (negCount > allLons.length / 2) {
+      // Majority of vertices are in the western hemisphere →
+      // fold the positive-longitude outliers into negative equivalents.
+      const adjusted = allLons.map(l => (l > 90 ? l - 360 : l))
+      minLon = Math.min(...adjusted)
+      maxLon = Math.max(...adjusted)
+    }
+  }
+
   return { minLat, maxLat, minLon, maxLon }
 }
 
-// ─── Small UI helpers ─────────────────────────────────────────────────────────
+// --- Small UI helpers ---------------------------------------------------------
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
@@ -90,7 +112,7 @@ function Divider() {
   return <div className="border-t border-crusader-gold/8 my-4" />
 }
 
-// ─── Mode Indicator (globe overlay) ──────────────────────────────────────────
+// --- Mode Indicator (globe overlay) ------------------------------------------
 
 function ModeIndicator({ mode }: { mode: MapMode }) {
   const labels: Record<MapMode, { label: string; hint: string; icon: typeof Globe }> = {
@@ -137,26 +159,26 @@ function ZoomGuide({ mode }: { mode: MapMode }) {
 }
 
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// --- Page ---------------------------------------------------------------------
 
 export default function MapCreatorPage() {
   const router = useRouter()
   const player = useAppStore((s) => s.player)
 
-  // ── View state ────────────────────────────────────────────────────────────────
+  // -- View state ----------------------------------------------------------------
   const [view, setView] = useState<AppView>('globe')
 
-  // ── Globe interaction ─────────────────────────────────────────────────────────
+  // -- Globe interaction ---------------------------------------------------------
   const [zoomDistance, setZoomDistance] = useState(2.8)
   const [selCountryIds, setSelCountryIds] = useState<number[]>([])
   const [selCountryFeats, setSelCountryFeats] = useState<GeoJSON.Feature[]>([])
   const [selContinents, setSelContinents] = useState<ContinentId[]>([])
 
-  // ── Map metadata ──────────────────────────────────────────────────────────────
+  // -- Map metadata --------------------------------------------------------------
   const [meta, setMeta] = useState<MapMeta>({ name: '', desc: '' })
   const [zoneCount, setZoneCount] = useState(25)
 
-  // ── Generated output ──────────────────────────────────────────────────────────
+  // -- Generated output ----------------------------------------------------------
   const [generatedCities,      setGeneratedCities]      = useState<CityFull[]>([])
   const [generatedTerritories, setGeneratedTerritories] = useState<Territory[]>([])
   const [bonusGroups,          setBonusGroups]          = useState<BonusGroup[]>([])
@@ -178,7 +200,7 @@ export default function MapCreatorPage() {
     label: c.name,
   })), [generatedCities])
 
-  // ── Continent selection ───────────────────────────────────────────────────────
+  // -- Continent selection -------------------------------------------------------
   const handleContinentSelect = useCallback((
     continent: ContinentId,
     countryIds: number[],
@@ -203,12 +225,12 @@ export default function MapCreatorPage() {
         })]
       })
       if (!meta.name) {
-        setMeta((m) => ({ ...m, name: `${CONTINENT_INFO[continent].label} — ${new Date().getFullYear()}` }))
+        setMeta((m) => ({ ...m, name: `${CONTINENT_INFO[continent].label} - ${new Date().getFullYear()}` }))
       }
     }
   }, [selContinents, meta.name])
 
-  // ── Country toggle ────────────────────────────────────────────────────────────
+  // -- Country toggle ------------------------------------------------------------
   const handleCountryToggle = useCallback((id: number, _name: string, feat: GeoJSON.Feature) => {
     setSelCountryIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id])
     setSelCountryFeats((p) => {
@@ -229,7 +251,7 @@ export default function MapCreatorPage() {
     setGeneratedCities([]); setGeneratedTerritories([]); setBonusGroups([]); setSavedId(null)
   }, [])
 
-  // ── Auto-generate zones when selection or count changes ─────────────────────
+  // -- Auto-generate zones when selection or count changes ---------------------
   useEffect(() => {
     if (selCountryIds.length === 0) {
       setGeneratedCities([])
@@ -264,14 +286,14 @@ export default function MapCreatorPage() {
     setSavedId(null)
   }, [selCountryIds, selCountryFeats, zoneCount])
 
-  // ── Preview toggle ────────────────────────────────────────────────────────────
+  // -- Preview toggle ------------------------------------------------------------
   function handleGenerate() {
     if (selCountryIds.length === 0) return
     setView('preview')
   }
 
-  // ── Rename territory ──────────────────────────────────────────────────────────
-  // ── Save ──────────────────────────────────────────────────────────────────────
+  // -- Rename territory ----------------------------------------------------------
+  // -- Save ----------------------------------------------------------------------
   async function handleSave() {
     setSaveError(null)
     if (!player) { setSaveError('You must be signed in to save a map.'); return }
@@ -311,246 +333,6 @@ export default function MapCreatorPage() {
       setSaving(false)
     }
   }
-
-  // ───────────────�        <main className="flex-1 flex flex-row overflow-hidden pt-20">
-
-          {/* Left Panel */}
-          <div
-            className="w-80 xl:w-96 flex flex-col border-r border-crusader-gold/10 overflow-hidden"
-            style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)' }}
-          >
-            {/* Header */}
-            <div className="shrink-0 px-5 pt-5 pb-4 border-b border-crusader-gold/10">
-              <div className="flex items-center gap-2.5 mb-0.5">
-                <Globe size={15} className="text-crusader-gold" />
-                <h1 className="font-cinzel text-base font-bold text-crusader-gold tracking-wide">Map Creator</h1>
-              </div>
-              <p className="text-[11px] text-crusader-gold/35 font-cinzel tracking-wide pl-6">Forge your battlefield</p>
-            </div>
-
-            {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1 scrollbar-none">
-
-              {/* Map identity */}
-              <SectionHeader>Map Identity</SectionHeader>
-              <div className="space-y-3 mb-1">
-                <Input
-                  label="Map Name"
-                  value={meta.name}
-                  onChange={(e) => setMeta((m) => ({ ...m, name: e.target.value }))}
-                  placeholder="Name your battlefield..."
-                />
-                <div>
-                  <label className="block text-[11px] font-cinzel text-crusader-gold/50 tracking-widest uppercase mb-1.5">
-                    Description
-                  </label>
-                  <textarea
-                    value={meta.desc}
-                    onChange={(e) => setMeta((m) => ({ ...m, desc: e.target.value }))}
-                    placeholder="Describe the strategic landscape..."
-                    rows={2}
-                    className="w-full bg-crusader-dark/60 border border-crusader-gold/15 rounded-xl px-3 py-2.5 text-xs text-crusader-gold/70 placeholder:text-crusader-gold/20 focus:outline-none focus:border-crusader-gold/40 resize-none font-cinzel"
-                  />
-                </div>
-              </div>
-
-              <Divider />
-
-              {/* Selected regions */}
-              <div className="flex items-center justify-between mb-2.5">
-                <SectionHeader>Selected Regions</SectionHeader>
-                {selCountryIds.length > 0 && (
-                  <button
-                    onClick={clearAll}
-                    className="text-[10px] text-crusader-gold/30 hover:text-red-400 font-cinzel transition-colors mb-2.5"
-                  >
-                    Clear All
-                  </button>
-                )}
-              </div>
-
-              {selCountryIds.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-6 text-center">
-                  <MapPin size={18} className="text-crusader-gold/15" />
-                  <p className="text-xs text-crusader-gold/25 font-cinzel leading-relaxed">
-                    Click on the globe to select<br />countries or continents
-                  </p>
-                  <p className="text-[10px] text-crusader-gold/15 font-cinzel">Zoom out for continent mode</p>
-                </div>
-              ) : (
-                <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-none">
-                  {selCountryIds.map((id) => {
-                    const cont = getContinent(id)
-                    return (
-                      <div key={id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-crusader-gold/5 border border-crusader-gold/10 group">
-                        {cont && (
-                          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CONTINENT_INFO[cont]?.color ?? '#C9A84C' }} />
-                        )}
-                        <span className="text-xs text-crusader-gold/70 flex-1 truncate font-cinzel">{getCountryName(id)}</span>
-                        <button
-                          onClick={() => removeCountry(id)}
-                          className="opacity-0 group-hover:opacity-100 text-crusader-gold/25 hover:text-red-400 transition-all"
-                        >
-                          <X size={11} />
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-            </div>
-
-            {/* Zone count slider — always visible */}
-            <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10" style={{ background: 'rgba(6,5,3,0.88)' }}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-cinzel text-crusader-gold/55 uppercase tracking-widest">
-                  Deployable Zones
-                </span>
-                <span className="text-sm font-cinzel font-bold text-crusader-gold">{zoneCount}</span>
-              </div>
-              <input
-                type="range" min={2} max={50} value={zoneCount}
-                onChange={(e) => setZoneCount(Number(e.target.value))}
-                className="w-full accent-crusader-gold cursor-pointer"
-              />
-              <div className="flex justify-between text-[10px] text-crusader-gold/20 mt-1 font-cinzel">
-                <span>2 min</span>
-                <span className="text-crusader-gold/35 text-center">
-                  {selCountryIds.length > 0
-                    ? `${getCitiesForCountries(selCountryIds).length} cities available`
-                    : 'select regions first'}
-                </span>
-                <span>50 max</span>
-              </div>
-              {selCountryIds.length > 0 && zoneCount > getCitiesForCountries(selCountryIds).length && (
-                <p className="text-[10px] text-amber-400/70 font-cinzel mt-1.5 text-center">
-                  Only {getCitiesForCountries(selCountryIds).length} cities available — will use all
-                </p>
-              )}
-            </div>
-
-            {/* Sticky footer */}
-            <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.95)' }}>
-              <Button
-                fullWidth
-                size="lg"
-                disabled={selCountryIds.length === 0}
-                loading={generating}
-                onClick={handleGenerate}
-                icon={<Layers size={15} />}
-              >
-                Review Map
-              </Button>
-              {selCountryIds.length === 0 && (
-                <p className="text-[10px] text-crusader-gold/25 text-center font-cinzel">
-                  Select regions on the globe first
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Globe */}
-          <div className="flex-1 relative bg-crusader-void overflow-hidden">
-            <EarthGlobe
-              interactive
-              autoRotate={false}
-              selectionMode={globeSelMode}
-              selectedIds={selCountryIds}
-              onContinentSelect={handleContinentSelect}
-              onMultiCountryToggle={handleCountryToggle}
-              onZoomChange={setZoomDistance}
-              markers={markers}
-              territories={generatedTerritories}
-              countryFeatures={selCountryFeats}
-              className="absolute inset-0 w-full h-full"
-            />
-            <ModeIndicator mode={mapMode} />
-            <ZoomGuide mode={mapMode} />
-
-            {selCountryIds.length > 0 && (
-              <div className="absolute top-5 right-5 pointer-events-none">
-                <div
-                  className="px-3 py-1.5 rounded-full border border-crusader-gold/30 backdrop-blur-md"
-                  style={{ background: 'rgba(8,6,4,0.75)' }}
-                >
-                  <span className="font-cinzel text-xs text-crusader-gold">
-                    {selCountryIds.length} {selCountryIds.length === 1 ? 'territory' : 'territories'} selected
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-        </main>
-</span>
-                        <button
-                          onClick={() => removeCountry(id)}
-                          className="opacity-0 group-hover:opacity-100 text-crusader-gold/25 hover:text-red-400 transition-all"
-                        >
-                          <X size={11} />
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-            </div>
-
-            {/* Zone count slider — always visible */}
-            <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10" style={{ background: 'rgba(6,5,3,0.88)' }}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-cinzel text-crusader-gold/55 uppercase tracking-widest">
-                  Deployable Zones
-                </span>
-                <span className="text-sm font-cinzel font-bold text-crusader-gold">{zoneCount}</span>
-              </div>
-              <input
-                type="range" min={2} max={50} value={zoneCount}
-                onChange={(e) => setZoneCount(Number(e.target.value))}
-                className="w-full accent-crusader-gold cursor-pointer"
-              />
-              <div className="flex justify-between text-[10px] text-crusader-gold/20 mt-1 font-cinzel">
-                <span>2 min</span>
-                <span className="text-crusader-gold/35 text-center">
-                  {selCountryIds.length > 0
-                    ? `${getCitiesForCountries(selCountryIds).length} cities available`
-                    : 'select regions first'}
-                </span>
-                <span>50 max</span>
-              </div>
-              {selCountryIds.length > 0 && zoneCount > getCitiesForCountries(selCountryIds).length && (
-                <p className="text-[10px] text-amber-400/70 font-cinzel mt-1.5 text-center">
-                  Only {getCitiesForCountries(selCountryIds).length} cities available — will use all
-                </p>
-              )}
-            </div>
-
-            {/* Sticky footer */}
-            <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.95)' }}>
-              <Button
-                fullWidth
-                size="lg"
-                disabled={selCountryIds.length === 0}
-                loading={generating}
-                onClick={handleGenerate}
-                icon={<Layers size={15} />}
-              >
-                Review Map
-              </Button>
-              {selCountryIds.length === 0 && (
-                <p className="text-[10px] text-crusader-gold/25 text-center font-cinzel">
-                  Select regions on the globe first
-                </p>
-              )}
-            </div>
-          </div>
-        </main>
-      </div>
-    )
-  }
-
 
 
   const canSave = !!player && meta.name.trim().length > 0 && generatedTerritories.length > 0
@@ -611,12 +393,12 @@ export default function MapCreatorPage() {
           </div>
         </div>
 
-        {/* Right panel — fixed height, flex column so footer is always visible */}
+        {/* Right panel - fixed height, flex column so footer is always visible */}
         <div
           className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10"
           style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)', height: '100%' }}
         >
-          {/* ── Header ── */}
+          {/* -- Header -- */}
           <div className="shrink-0 px-5 pt-5 pb-3 border-b border-crusader-gold/10">
             <button
               onClick={() => setView('globe')}
@@ -626,11 +408,11 @@ export default function MapCreatorPage() {
             </button>
             <h2 className="font-cinzel text-base font-bold text-crusader-gold">{meta.name || 'Untitled Map'}</h2>
             <p className="text-[11px] text-crusader-gold/35 font-cinzel mt-0.5">
-              {generatedCities.length} zones · {bonusGroups.length} bonus groups
+              {generatedCities.length} zones . {bonusGroups.length} bonus groups
             </p>
           </div>
 
-          {/* ── Map Name ── */}
+          {/* -- Map Name -- */}
           <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
             <SectionHeader>Map Name</SectionHeader>
             <Input
@@ -640,7 +422,7 @@ export default function MapCreatorPage() {
             />
           </div>
 
-          {/* ── Bonus Groups (compact pills) ── */}
+          {/* -- Bonus Groups (compact pills) -- */}
           {bonusGroups.length > 0 && (
             <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
               <div className="flex items-center justify-between mb-1.5">
@@ -656,14 +438,14 @@ export default function MapCreatorPage() {
                     className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-crusader-gold/8 border border-crusader-gold/12 text-[10px] font-cinzel"
                   >
                     <span className="text-crusader-gold/65 truncate max-w-[80px]">{bg.name}</span>
-                    <span className="text-crusader-gold font-bold shrink-0">+{bg.bonus_armies}✦</span>
+                    <span className="text-crusader-gold font-bold shrink-0">+{bg.bonus_armies}*</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* ── Deployable Zones — fills remaining space and scrolls internally ── */}
+          {/* -- Deployable Zones - fills remaining space and scrolls internally -- */}
           <div className="flex-1 overflow-y-auto px-5 py-3 scrollbar-none min-h-0">
             <SectionHeader>Deployable Zones ({generatedCities.length})</SectionHeader>
             <div className="space-y-0.5">
@@ -682,7 +464,7 @@ export default function MapCreatorPage() {
             </div>
           </div>
 
-          {/* ── Sticky footer — always visible ── */}
+          {/* -- Sticky footer - always visible -- */}
           <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.97)' }}>
             {/* Zone slider (compact) */}
             <div className="flex items-center gap-3">

@@ -412,15 +412,53 @@ function makeMarkerPolygon(center: [number, number], r: number): [number, number
 // ─── Misc ─────────────────────────────────────────────────────────────────────
 
 /**
+ * Compute the focus [lat, lon] center of a bounding box, correctly handling
+ * antimeridian-crossing regions.
+ *
+ * The naive (min+max)/2 fails for regions like the USA whose GeoJSON stores
+ * Alaska's Aleutian Islands at positive longitudes (~+172°E), producing a
+ * center near 2°E (West Africa) instead of the continental US.
+ *
+ * When the longitude span > 180° we use the midpoint of the *smaller* arc
+ * (going the other way around the globe) which keeps the result in the correct
+ * hemisphere.
+ */
+export function boundsToFocusLatLon(bounds: {
+  minLat: number; maxLat: number; minLon: number; maxLon: number
+}): [number, number] {
+  const lat  = (bounds.minLat + bounds.maxLat) / 2
+  const span = bounds.maxLon - bounds.minLon
+
+  if (span <= 180) {
+    return [lat, (bounds.minLon + bounds.maxLon) / 2]
+  }
+
+  // Antimeridian crossing: use the midpoint of the smaller complementary arc.
+  // e.g. USA  minLon=-168, maxLon=172 → smaller arc = 20°, centre = -178°W
+  //      (Bering Sea/Alaska — far better than 2°E/Europe)
+  const smallerArcCenter = (bounds.minLon + (bounds.maxLon - 360)) / 2
+  const lon = smallerArcCenter < -180
+    ? smallerArcCenter + 360
+    : smallerArcCenter > 180
+      ? smallerArcCenter - 360
+      : smallerArcCenter
+  return [lat, lon]
+}
+
+/**
  * Compute a globe camera distance (1.4 – 2.8) from a lat/lon bounding box.
  * Smaller value = more zoomed in.
+ * When the lon span > 180° (antimeridian crossing) we use the smaller arc span
+ * so the zoom level is appropriate for the actual region, not the globe gap.
  */
 export function cameraDistanceFromBounds(bounds: {
   minLat: number; maxLat: number; minLon: number; maxLon: number
 }): number {
   const latSpan = Math.abs(bounds.maxLat - bounds.minLat)
-  const lonSpan = Math.abs(bounds.maxLon - bounds.minLon)
-  const span    = Math.max(latSpan, lonSpan)
+  let   lonSpan = Math.abs(bounds.maxLon - bounds.minLon)
+  // Use the smaller arc for antimeridian-crossing bounds
+  if (lonSpan > 180) lonSpan = 360 - lonSpan
+  const span = Math.max(latSpan, lonSpan)
   // Linear mapping: span 0° → 1.4, span 180°+ → 2.8
   return Math.max(1.4, Math.min(2.8, 1.4 + (span / 180) * 1.4))
 }

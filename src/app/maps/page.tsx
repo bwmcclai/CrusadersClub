@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
-import { cn, cameraDistanceFromBounds } from '@/lib/utils'
+import { cn, cameraDistanceFromBounds, boundsToFocusLatLon } from '@/lib/utils'
 import ZoneCartogram from '@/components/map/ZoneCartogram'
 import Button from '@/components/ui/Button'
 import { Map, Plus, Globe, Sword, Star, Layers, X, Search, ExternalLink } from 'lucide-react'
@@ -54,8 +54,7 @@ function MapCard({ map, index, onClick }: { map: MapRecord; index: number; onCli
 
   const selectedIds  = map.country_iso_ids ?? []
   const focusLatLon: [number, number] | undefined = map.region_bounds
-    ? [(map.region_bounds.minLat + map.region_bounds.maxLat) / 2,
-       (map.region_bounds.minLon + map.region_bounds.maxLon) / 2]
+    ? boundsToFocusLatLon(map.region_bounds)
     : undefined
 
   const camDist = map.region_bounds ? cameraDistanceFromBounds(map.region_bounds) : 2.0
@@ -242,10 +241,7 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
                     selectionMode="none"
                     selectedIds={map.country_iso_ids ?? []}
                     territories={map.territories}
-                    focusLatLon={map.region_bounds ? [
-                      (map.region_bounds.minLat + map.region_bounds.maxLat) / 2,
-                      (map.region_bounds.minLon + map.region_bounds.maxLon) / 2,
-                    ] : undefined}
+                    focusLatLon={map.region_bounds ? boundsToFocusLatLon(map.region_bounds) : undefined}
                     className="absolute inset-0 w-full h-full"
                   />
                 </motion.div>

@@ -7,7 +7,7 @@ import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
 import { Sword, Map, Users, Zap, Shield, Clock, Search, Plus, Filter, Bot, Globe, PenTool } from 'lucide-react'
-import { formatMode, cameraDistanceFromBounds } from '@/lib/utils'
+import { formatMode, cameraDistanceFromBounds, boundsToFocusLatLon } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
@@ -41,8 +41,7 @@ function GameCard({
   const isFull      = game.current_players >= game.max_players
   const selectedIds = game.country_iso_ids ?? []
   const focusLatLon: [number, number] | undefined = game.region_bounds
-    ? [(game.region_bounds.minLat + game.region_bounds.maxLat) / 2,
-       (game.region_bounds.minLon + game.region_bounds.maxLon) / 2]
+    ? boundsToFocusLatLon(game.region_bounds)
     : undefined
 
   const camDist = game.region_bounds ? cameraDistanceFromBounds(game.region_bounds) : 2.0
@@ -489,7 +488,7 @@ export default function LobbyPage() {
     const selectedIds  = cached?.country_iso_ids ?? game.country_iso_ids ?? []
     const bounds       = game.region_bounds
     const focusLatLon: [number, number] | undefined = bounds
-      ? [(bounds.minLat + bounds.maxLat) / 2, (bounds.minLon + bounds.maxLon) / 2]
+      ? boundsToFocusLatLon(bounds)
       : undefined
     setPreviewGlobe({ regionName: game.region_name, territories, selectedIds, focusLatLon })
   }
