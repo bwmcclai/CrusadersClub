@@ -378,6 +378,25 @@ export function generateZonesFromCities(
     })
   }
 
+  // ── Cross-country adjacency ───────────────────────────────────────────────
+  // Per-country Voronoi only connects territories within the same country.
+  // Run a global Delaunay over all seeds so border territories across different
+  // countries become adjacent to each other.
+  if (allTerritories.length >= 2) {
+    const allSeeds = allTerritories.map((t) => t.seed)
+    const globalDelaunay = Delaunay.from(allSeeds)
+    for (let i = 0; i < allTerritories.length; i++) {
+      for (const j of Array.from(globalDelaunay.neighbors(i))) {
+        const t1 = allTerritories[i]
+        const t2 = allTerritories[j]
+        if (t1.bonus_group !== t2.bonus_group) {
+          if (!t1.adjacent_ids.includes(t2.id)) t1.adjacent_ids.push(t2.id)
+          if (!t2.adjacent_ids.includes(t1.id)) t2.adjacent_ids.push(t1.id)
+        }
+      }
+    }
+  }
+
   return { territories: allTerritories, bonusGroups, cityCount: top.length }
 }
 

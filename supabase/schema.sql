@@ -44,6 +44,7 @@ create table if not exists public.battle_maps (
   author_id      uuid references public.players(id) on delete set null,
   region_name    text not null,
   region_bounds  jsonb not null,  -- { minLat, maxLat, minLon, maxLon }
+  country_iso_ids integer[] not null default '{}', -- numeric ISO-3166 codes of selected countries
   territories    jsonb not null default '[]',   -- Territory[]
   bonus_groups   jsonb not null default '[]',   -- BonusGroup[]
   thumbnail_url  text,

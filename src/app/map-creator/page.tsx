@@ -403,6 +403,7 @@ export default function MapCreatorPage() {
         author_id: player.id,
         region_name: regionName || 'Custom Region',
         region_bounds: bounds,
+        country_iso_ids: selCountryIds,
         territories: generatedTerritories,
         bonus_groups: bonusGroups,
         is_public: true,

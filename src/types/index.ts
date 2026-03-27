@@ -58,6 +58,7 @@ export interface BattleMap {
     minLat: number; maxLat: number
     minLon: number; maxLon: number
   }
+  country_iso_ids: number[]     // numeric ISO-3166 codes of selected countries
   territories: Territory[]
   bonus_groups: BonusGroup[]
   thumbnail_url?: string
