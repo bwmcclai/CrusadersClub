@@ -341,178 +341,276 @@ export default function MapCreatorPage() {
     <div className="h-screen bg-crusader-void flex flex-col overflow-hidden">
       <main className="flex-1 flex flex-row overflow-hidden pt-20">
 
-        {/* Main view: Zone Cartogram or Globe */}
-        <div className="flex-1 relative overflow-hidden bg-crusader-void">
-
-          {previewTab === 'cartogram' ? (
-            <div className="absolute inset-0 flex items-center justify-center p-4">
-              <ZoneCartogram territories={generatedTerritories} />
+        {view === 'globe' ? (
+          <>
+            {/* ── Interactive Selection Globe ── */}
+            <div className="flex-1 relative overflow-hidden bg-crusader-void">
+              <EarthGlobe
+                interactive
+                autoRotate={false}
+                selectionMode={globeSelMode}
+                selectedIds={selCountryIds}
+                onContinentSelect={handleContinentSelect}
+                onMultiCountryToggle={handleCountryToggle}
+                onZoomChange={setZoomDistance}
+                markers={markers}
+                territories={generatedTerritories}
+                countryFeatures={selCountryFeats}
+                className="absolute inset-0 w-full h-full"
+              />
+              <ModeIndicator mode={mapMode} />
+              <ZoomGuide mode={mapMode} />
             </div>
-          ) : (
-            <EarthGlobe
-              interactive
-              autoRotate={false}
-              selectionMode="none"
-              markers={markers}
-              territories={generatedTerritories}
-              countryFeatures={selCountryFeats}
-              className="absolute inset-0 w-full h-full"
-            />
-          )}
 
-          {/* View toggle */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex">
-            {(['cartogram', 'globe'] as const).map((tab, i) => (
-              <button
-                key={tab}
-                onClick={() => setPreviewTab(tab)}
-                className={`px-4 py-1.5 text-[11px] font-cinzel tracking-wider border border-crusader-gold/25 backdrop-blur-md transition-colors ${
-                  i === 0 ? 'rounded-l-full' : 'rounded-r-full border-l-0'
-                } ${
-                  previewTab === tab
-                    ? 'bg-crusader-gold/20 text-crusader-gold'
-                    : 'bg-crusader-void/70 text-crusader-gold/35 hover:text-crusader-gold/65'
-                }`}
-              >
-                {tab === 'cartogram' ? 'Zone Map' : 'Globe'}
-              </button>
-            ))}
-          </div>
-
-          {/* Zone count badge */}
-          <div className="absolute top-4 right-5 pointer-events-none">
+            {/* ── Globe Selection Panel ── */}
             <div
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-teal-500/30 backdrop-blur-md"
-              style={{ background: 'rgba(8,6,4,0.70)' }}
+              className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10"
+              style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)', height: '100%' }}
             >
-              <div className="w-1.5 h-1.5 rounded-full bg-teal-400" style={{ boxShadow: '0 0 6px rgba(77,217,172,0.8)' }} />
-              <span className="font-cinzel text-[11px] text-teal-300 tracking-widest">
-                {generatedTerritories.length} Zones
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right panel - fixed height, flex column so footer is always visible */}
-        <div
-          className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10"
-          style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)', height: '100%' }}
-        >
-          {/* -- Header -- */}
-          <div className="shrink-0 px-5 pt-5 pb-3 border-b border-crusader-gold/10">
-            <button
-              onClick={() => setView('globe')}
-              className="flex items-center gap-1.5 text-[11px] font-cinzel text-crusader-gold/35 hover:text-crusader-gold/70 transition-colors mb-3"
-            >
-              <ChevronLeft size={12} /> Back to Globe
-            </button>
-            <h2 className="font-cinzel text-base font-bold text-crusader-gold">{meta.name || 'Untitled Map'}</h2>
-            <p className="text-[11px] text-crusader-gold/35 font-cinzel mt-0.5">
-              {generatedCities.length} zones . {bonusGroups.length} bonus groups
-            </p>
-          </div>
-
-          {/* -- Map Name -- */}
-          <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
-            <SectionHeader>Map Name</SectionHeader>
-            <Input
-              value={meta.name}
-              onChange={(e) => { setMeta((m) => ({ ...m, name: e.target.value })); setSaveError(null) }}
-              placeholder="Name your map..."
-            />
-          </div>
-
-          {/* -- Bonus Groups (compact pills) -- */}
-          {bonusGroups.length > 0 && (
-            <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
-              <div className="flex items-center justify-between mb-1.5">
-                <SectionHeader>Bonus Groups</SectionHeader>
-                <span className="text-[10px] font-cinzel text-crusader-gold/35 mb-2.5">
-                  {bonusGroups.length} group{bonusGroups.length !== 1 ? 's' : ''}
-                </span>
+              {/* Header */}
+              <div className="shrink-0 px-5 pt-5 pb-3 border-b border-crusader-gold/10">
+                <h2 className="font-cinzel text-base font-bold text-crusader-gold">Map Creator</h2>
+                <p className="text-[11px] text-crusader-gold/35 font-cinzel mt-0.5">
+                  {selCountryIds.length > 0
+                    ? `${selCountryIds.length} region${selCountryIds.length !== 1 ? 's' : ''} selected · ${generatedTerritories.length} zones`
+                    : 'Click the globe to select regions'}
+                </p>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {bonusGroups.map((bg) => (
-                  <div
-                    key={bg.id}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-crusader-gold/8 border border-crusader-gold/12 text-[10px] font-cinzel"
-                  >
-                    <span className="text-crusader-gold/65 truncate max-w-[80px]">{bg.name}</span>
-                    <span className="text-crusader-gold font-bold shrink-0">+{bg.bonus_armies}*</span>
+
+              {/* Selected countries list — fills remaining space */}
+              <div className="flex-1 overflow-y-auto px-5 py-3 scrollbar-none min-h-0">
+                {selCountryIds.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+                    <Globe size={28} className="text-crusader-gold/20" />
+                    <p className="text-[11px] font-cinzel text-crusader-gold/30 leading-relaxed">
+                      Zoom in to enter Country Mode,<br />then click countries to add them
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    <SectionHeader>Selected Regions ({selCountryIds.length})</SectionHeader>
+                    <div className="space-y-0.5">
+                      {selCountryIds.map((id) => (
+                        <div key={id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-crusader-gold/5 transition-colors group">
+                          <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-crusader-gold/40" />
+                          <span className="text-[11px] text-crusader-gold/65 flex-1 truncate font-cinzel">
+                            {getCountryName(id)}
+                          </span>
+                          <button
+                            onClick={() => removeCountry(id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400/60 hover:text-red-400"
+                          >
+                            <X size={11} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.97)' }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-cinzel text-crusader-gold/40 uppercase tracking-widest whitespace-nowrap">Zones</span>
+                  <input
+                    type="range" min={2} max={200} value={zoneCount}
+                    onChange={(e) => setZoneCount(Number(e.target.value))}
+                    className="flex-1 accent-crusader-gold cursor-pointer"
+                  />
+                  <span className="text-[11px] font-cinzel font-bold text-crusader-gold w-6 text-right">{zoneCount}</span>
+                </div>
+
+                {selCountryIds.length > 0 && (
+                  <Button fullWidth size="sm" variant="outline" icon={<X size={13} />} onClick={clearAll}>
+                    Clear Selection
+                  </Button>
+                )}
+
+                <Button
+                  fullWidth
+                  size="lg"
+                  disabled={selCountryIds.length === 0 || generatedTerritories.length === 0}
+                  onClick={handleGenerate}
+                  icon={<Sword size={15} />}
+                >
+                  Preview Map
+                </Button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* ── Preview Zone Map ── */}
+            <div className="flex-1 relative overflow-hidden bg-crusader-void">
+
+              {previewTab === 'cartogram' ? (
+                <div className="absolute inset-0 flex items-center justify-center p-4">
+                  <ZoneCartogram territories={generatedTerritories} />
+                </div>
+              ) : (
+                <EarthGlobe
+                  interactive
+                  autoRotate={false}
+                  selectionMode="none"
+                  markers={markers}
+                  territories={generatedTerritories}
+                  countryFeatures={selCountryFeats}
+                  className="absolute inset-0 w-full h-full"
+                />
+              )}
+
+              {/* View toggle */}
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex">
+                {(['cartogram', 'globe'] as const).map((tab, i) => (
+                  <button
+                    key={tab}
+                    onClick={() => setPreviewTab(tab)}
+                    className={`px-4 py-1.5 text-[11px] font-cinzel tracking-wider border border-crusader-gold/25 backdrop-blur-md transition-colors ${
+                      i === 0 ? 'rounded-l-full' : 'rounded-r-full border-l-0'
+                    } ${
+                      previewTab === tab
+                        ? 'bg-crusader-gold/20 text-crusader-gold'
+                        : 'bg-crusader-void/70 text-crusader-gold/35 hover:text-crusader-gold/65'
+                    }`}
+                  >
+                    {tab === 'cartogram' ? 'Zone Map' : 'Globe'}
+                  </button>
                 ))}
               </div>
-            </div>
-          )}
 
-          {/* -- Deployable Zones - fills remaining space and scrolls internally -- */}
-          <div className="flex-1 overflow-y-auto px-5 py-3 scrollbar-none min-h-0">
-            <SectionHeader>Deployable Zones ({generatedCities.length})</SectionHeader>
-            <div className="space-y-0.5">
-              {generatedCities.map((c, i) => {
-                const cont = getContinent(c.country)
-                return (
-                  <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-crusader-gold/5 transition-colors">
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0 border border-teal-400/60 bg-teal-900/60" />
-                    <span className="text-[11px] text-crusader-gold/65 flex-1 truncate font-cinzel">{c.name}</span>
-                    {cont && (
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CONTINENT_INFO[cont]?.color ?? '#C9A84C' }} />
-                    )}
+              {/* Zone count badge */}
+              <div className="absolute top-4 right-5 pointer-events-none">
+                <div
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-teal-500/30 backdrop-blur-md"
+                  style={{ background: 'rgba(8,6,4,0.70)' }}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-teal-400" style={{ boxShadow: '0 0 6px rgba(77,217,172,0.8)' }} />
+                  <span className="font-cinzel text-[11px] text-teal-300 tracking-widest">
+                    {generatedTerritories.length} Zones
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Preview Right Panel ── */}
+            <div
+              className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10"
+              style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)', height: '100%' }}
+            >
+              {/* Header */}
+              <div className="shrink-0 px-5 pt-5 pb-3 border-b border-crusader-gold/10">
+                <button
+                  onClick={() => setView('globe')}
+                  className="flex items-center gap-1.5 text-[11px] font-cinzel text-crusader-gold/35 hover:text-crusader-gold/70 transition-colors mb-3"
+                >
+                  <ChevronLeft size={12} /> Back to Globe
+                </button>
+                <h2 className="font-cinzel text-base font-bold text-crusader-gold">{meta.name || 'Untitled Map'}</h2>
+                <p className="text-[11px] text-crusader-gold/35 font-cinzel mt-0.5">
+                  {generatedCities.length} zones · {bonusGroups.length} bonus groups
+                </p>
+              </div>
+
+              {/* Map Name */}
+              <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
+                <SectionHeader>Map Name</SectionHeader>
+                <Input
+                  value={meta.name}
+                  onChange={(e) => { setMeta((m) => ({ ...m, name: e.target.value })); setSaveError(null) }}
+                  placeholder="Name your map..."
+                />
+              </div>
+
+              {/* Bonus Groups */}
+              {bonusGroups.length > 0 && (
+                <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <SectionHeader>Bonus Groups</SectionHeader>
+                    <span className="text-[10px] font-cinzel text-crusader-gold/35 mb-2.5">
+                      {bonusGroups.length} group{bonusGroups.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                )
-              })}
+                  <div className="flex flex-wrap gap-1.5">
+                    {bonusGroups.map((bg) => (
+                      <div
+                        key={bg.id}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-crusader-gold/8 border border-crusader-gold/12 text-[10px] font-cinzel"
+                      >
+                        <span className="text-crusader-gold/65 truncate max-w-[80px]">{bg.name}</span>
+                        <span className="text-crusader-gold font-bold shrink-0">+{bg.bonus_armies}*</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Deployable Zones */}
+              <div className="flex-1 overflow-y-auto px-5 py-3 scrollbar-none min-h-0">
+                <SectionHeader>Deployable Zones ({generatedCities.length})</SectionHeader>
+                <div className="space-y-0.5">
+                  {generatedCities.map((c, i) => {
+                    const cont = getContinent(c.country)
+                    return (
+                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-crusader-gold/5 transition-colors">
+                        <div className="w-1.5 h-1.5 rounded-full shrink-0 border border-teal-400/60 bg-teal-900/60" />
+                        <span className="text-[11px] text-crusader-gold/65 flex-1 truncate font-cinzel">{c.name}</span>
+                        {cont && (
+                          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CONTINENT_INFO[cont]?.color ?? '#C9A84C' }} />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.97)' }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-cinzel text-crusader-gold/40 uppercase tracking-widest whitespace-nowrap">Zones</span>
+                  <input
+                    type="range" min={2} max={200} value={zoneCount}
+                    onChange={(e) => setZoneCount(Number(e.target.value))}
+                    className="flex-1 accent-crusader-gold cursor-pointer"
+                  />
+                  <span className="text-[11px] font-cinzel font-bold text-crusader-gold w-6 text-right">{zoneCount}</span>
+                </div>
+
+                <Button
+                  fullWidth
+                  size="sm"
+                  variant="outline"
+                  icon={<ChevronLeft size={13} />}
+                  onClick={() => setView('globe')}
+                >
+                  Back to Globe
+                </Button>
+
+                {saveError && (
+                  <p className="text-[10px] text-red-400/85 font-cinzel text-center leading-relaxed">{saveError}</p>
+                )}
+
+                <Button
+                  fullWidth
+                  size="lg"
+                  disabled={!canSave || saving}
+                  loading={saving}
+                  onClick={handleSave}
+                  icon={<Save size={15} />}
+                >
+                  Save &amp; Publish Map
+                </Button>
+
+                {!player && (
+                  <p className="text-[10px] text-amber-400/60 text-center font-cinzel">Sign in to publish maps</p>
+                )}
+                {player && !meta.name.trim() && (
+                  <p className="text-[10px] text-crusader-gold/25 text-center font-cinzel">Enter a map name to publish</p>
+                )}
+              </div>
             </div>
-          </div>
-
-          {/* -- Sticky footer - always visible -- */}
-          <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.97)' }}>
-            {/* Zone slider (compact) */}
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-cinzel text-crusader-gold/40 uppercase tracking-widest whitespace-nowrap">Zones</span>
-              <input
-                type="range" min={2} max={200} value={zoneCount}
-                onChange={(e) => setZoneCount(Number(e.target.value))}
-                className="flex-1 accent-crusader-gold cursor-pointer"
-              />
-              <span className="text-[11px] font-cinzel font-bold text-crusader-gold w-6 text-right">{zoneCount}</span>
-            </div>
-
-            {/* Regenerate */}
-            <Button
-              fullWidth
-              size="sm"
-              variant="outline"
-              icon={<ChevronLeft size={13} />}
-              onClick={() => setView('globe')}
-            >
-              Back to Globe
-            </Button>
-
-            {/* Error */}
-            {saveError && (
-              <p className="text-[10px] text-red-400/85 font-cinzel text-center leading-relaxed">{saveError}</p>
-            )}
-
-            {/* Save & Publish */}
-            <Button
-              fullWidth
-              size="lg"
-              disabled={!canSave || saving}
-              loading={saving}
-              onClick={handleSave}
-              icon={<Save size={15} />}
-            >
-              Save &amp; Publish Map
-            </Button>
-
-            {!player && (
-              <p className="text-[10px] text-amber-400/60 text-center font-cinzel">Sign in to publish maps</p>
-            )}
-            {player && !meta.name.trim() && (
-              <p className="text-[10px] text-crusader-gold/25 text-center font-cinzel">Enter a map name to publish</p>
-            )}
-          </div>
-        </div>
+          </>
+        )}
       </main>
     </div>
   )
