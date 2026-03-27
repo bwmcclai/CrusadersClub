@@ -2,12 +2,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { getSupabaseClient } from '@/lib/supabase'
 import { joinGame } from '@/lib/gameService'
 import { useAppStore } from '@/lib/store'
 import type { Territory, BonusGroup, GameMode } from '@/types'
-import { ArrowLeft, Sword, Shield, Crosshair, ArrowRightLeft, Clock, Crown, Users, Dices } from 'lucide-react'
+import type { ArmyBadgeDef } from '@/components/three/EarthGlobe'
+import { ArrowLeft, Sword, Shield, Crosshair, ArrowRightLeft, Crown, Dices } from 'lucide-react'
 import Button from '@/components/ui/Button'
+
+const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), { ssr: false })
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -61,16 +65,6 @@ interface GameEvent {
 // Utilities
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function computeViewBox(territories: Territory[]) {
-  if (!territories.length) return '0 0 800 400'
-  const xs = territories.flatMap(t => t.polygon?.map(([x]) => x) ?? [])
-  const ys = territories.flatMap(t => t.polygon?.map(([, y]) => y) ?? [])
-  if (!xs.length) return '0 0 800 400'
-  const pad = 15
-  const minX = Math.min(...xs) - pad, minY = Math.min(...ys) - pad
-  return `${minX} ${minY} ${Math.max(...xs) - minX + pad} ${Math.max(...ys) - minY + pad}`
-}
-
 /** BFS: are two territories connected through owned territory? */
 function areConnected(
   from: string, to: string,
@@ -112,105 +106,66 @@ function calcDeployArmies(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Game Map SVG
+// Game Globe Map
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function GameMap({
-  territories, tsMap, playerMap, phase,
-  selectedId, attackFrom, attackTo, fortifyFrom, fortifyTo,
-  myGamePlayerId, isMyTurn,
-  onClick,
+function GameGlobeMap({
+  territories, tsMap, playerMap,
+  attackFrom, attackTo, fortifyFrom, fortifyTo,
+  isMyTurn, onClick,
 }: {
   territories: Territory[]
   tsMap: Map<string, TS>
   playerMap: Map<string, GP>
-  phase: Phase
-  selectedId: string | null
   attackFrom: string | null
   attackTo: string | null
   fortifyFrom: string | null
   fortifyTo: string | null
-  myGamePlayerId: string | null
   isMyTurn: boolean
   onClick: (id: string) => void
 }) {
-  const viewBox = useMemo(() => computeViewBox(territories), [territories])
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const ownerColors = useMemo(() => {
+    const result: Record<string, string> = {}
+    territories.forEach(t => {
+      const ts = tsMap.get(t.id)
+      const owner = ts?.ownerId ? playerMap.get(ts.ownerId) : null
+      result[t.id] = owner?.color ?? '#2a2a3a'
+    })
+    return result
+  }, [territories, tsMap, playerMap])
 
-  // Build adjacency set for highlights
   const attackFromAdj = useMemo(() => {
     if (!attackFrom) return new Set<string>()
     const t = territories.find(t => t.id === attackFrom)
     return new Set(t?.adjacent_ids ?? [])
   }, [attackFrom, territories])
 
+  const armyBadges = useMemo((): ArmyBadgeDef[] => {
+    return territories.map(t => {
+      const ts = tsMap.get(t.id)
+      const owner = ts?.ownerId ? playerMap.get(ts.ownerId) : null
+      const lat = 90 - t.seed[1] / 600 * 180
+      const lon = t.seed[0] / 1200 * 360 - 180
+      let highlight: string | undefined
+      if (attackFrom === t.id) highlight = '#FFDD00'
+      else if (attackTo === t.id) highlight = '#FF4444'
+      else if (attackFrom && !attackTo && attackFromAdj.has(t.id) && ts?.ownerId !== tsMap.get(attackFrom)?.ownerId) highlight = '#FF6666'
+      else if (fortifyFrom === t.id) highlight = '#00FF88'
+      else if (fortifyTo === t.id) highlight = '#00AAFF'
+      return { id: t.id, lat, lon, armies: ts?.armies ?? 0, color: owner?.color ?? '#555', highlight }
+    })
+  }, [territories, tsMap, playerMap, attackFrom, attackTo, fortifyFrom, fortifyTo, attackFromAdj])
+
   return (
-    <svg viewBox={viewBox} className="w-full h-full" preserveAspectRatio="xMidYMid meet" style={{ background: '#060810' }}>
-      <defs>
-        <pattern id="gm-water" width="24" height="24" patternUnits="userSpaceOnUse">
-          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(100,140,200,0.04)" strokeWidth="0.4" />
-        </pattern>
-        <filter id="glow"><feGaussianBlur stdDeviation="2" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-      </defs>
-      <rect x="-9999" y="-9999" width="99999" height="99999" fill="url(#gm-water)" />
-
-      {territories.map(t => {
-        if (!t.polygon || t.polygon.length < 3) return null
-        const ts = tsMap.get(t.id)
-        const owner = ts?.ownerId ? playerMap.get(ts.ownerId) : null
-        const color = owner?.color ?? '#333'
-        const armies = ts?.armies ?? 0
-        const [cx, cy] = t.seed
-        const d = t.polygon.map(([x, y], j) => `${j === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ') + ' Z'
-
-        const isHovered = hoveredId === t.id
-        const isSelected = selectedId === t.id
-        const isAttackFrom = attackFrom === t.id
-        const isAttackTo = attackTo === t.id
-        const isAttackTarget = attackFrom && !attackTo && attackFromAdj.has(t.id) && ts?.ownerId !== tsMap.get(attackFrom)?.ownerId
-        const isFortifyFrom = fortifyFrom === t.id
-        const isFortifyTo = fortifyTo === t.id
-        const isMine = ts?.ownerId === myGamePlayerId
-
-        let strokeColor = 'rgba(0,0,0,0.4)'
-        let strokeWidth = 0.5
-        let opacity = 0.75
-        if (isAttackFrom) { strokeColor = '#FFDD00'; strokeWidth = 2; opacity = 1 }
-        else if (isAttackTo) { strokeColor = '#FF4444'; strokeWidth = 2; opacity = 1 }
-        else if (isAttackTarget) { strokeColor = '#FF6666'; strokeWidth = 1.2; opacity = 0.9 }
-        else if (isFortifyFrom) { strokeColor = '#00FF88'; strokeWidth = 2; opacity = 1 }
-        else if (isFortifyTo) { strokeColor = '#00AAFF'; strokeWidth = 2; opacity = 1 }
-        else if (isSelected) { strokeColor = '#FFFFFF'; strokeWidth = 2; opacity = 1 }
-        else if (isHovered && isMyTurn && isMine) { strokeColor = '#F0D88A'; strokeWidth = 1.2; opacity = 0.9 }
-        else if (isHovered) { opacity = 0.85 }
-
-        return (
-          <g key={t.id}
-            onMouseEnter={() => setHoveredId(t.id)}
-            onMouseLeave={() => setHoveredId(null)}
-            onClick={() => onClick(t.id)}
-            style={{ cursor: isMyTurn ? 'pointer' : 'default' }}
-          >
-            <path d={d} fill={color} fillOpacity={opacity} stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
-            {/* Army count badge */}
-            <circle cx={cx} cy={cy} r={5.5} fill="rgba(0,0,0,0.7)" stroke={color} strokeWidth={0.6} />
-            <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
-              fontSize={4.5} fontWeight="bold" fontFamily="Cinzel, serif"
-              fill="#fff" style={{ pointerEvents: 'none' }}>
-              {armies}
-            </text>
-            {/* Territory name on hover */}
-            {isHovered && (
-              <text x={cx} y={cy - 9} textAnchor="middle" dominantBaseline="central"
-                fontSize={3.5} fontFamily="Cinzel, serif" fill="rgba(255,255,255,0.9)"
-                style={{ pointerEvents: 'none' }}>
-                {t.name}
-              </text>
-            )}
-          </g>
-        )
-      })}
-    </svg>
+    <EarthGlobe
+      territories={territories}
+      ownerColors={ownerColors}
+      armyBadges={armyBadges}
+      onTerritoryClick={isMyTurn ? onClick : undefined}
+      showContinentLabels={false}
+      cameraDistance={2.2}
+      className="w-full h-full"
+    />
   )
 }
 
@@ -779,9 +734,8 @@ export default function GamePage() {
       <div className="h-screen bg-crusader-void flex flex-col">
         <main className="flex-1 flex pt-20">
           <div className="flex-1 relative">
-            <GameMap territories={mapTerritories} tsMap={tsMap} playerMap={playerMap}
-              phase="deploy" selectedId={null} attackFrom={null} attackTo={null}
-              fortifyFrom={null} fortifyTo={null} myGamePlayerId={myGP?.id ?? null}
+            <GameGlobeMap territories={mapTerritories} tsMap={tsMap} playerMap={playerMap}
+              attackFrom={null} attackTo={null} fortifyFrom={null} fortifyTo={null}
               isMyTurn={false} onClick={() => {}} />
             {/* Victory overlay */}
             <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
@@ -855,12 +809,11 @@ export default function GamePage() {
       <main className="flex-1 flex overflow-hidden">
         {/* Map */}
         <div className="flex-1 relative">
-          <GameMap
+          <GameGlobeMap
             territories={mapTerritories} tsMap={tsMap} playerMap={playerMap}
-            phase={phase} selectedId={null}
             attackFrom={attackFrom} attackTo={attackTo}
             fortifyFrom={fortifyFrom} fortifyTo={fortifyTo}
-            myGamePlayerId={myGP?.id ?? null} isMyTurn={isMyTurn}
+            isMyTurn={isMyTurn}
             onClick={handleTerritoryClick}
           />
         </div>

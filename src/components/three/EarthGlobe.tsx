@@ -142,6 +142,20 @@ function polySpan(pts: [number, number][], angle: number): number {
   return hi - lo
 }
 
+/** Ray-casting point-in-polygon (equirectangular 1200×600 space) */
+function pointInPolygon2D(px: number, py: number, polygon: [number, number][]): boolean {
+  let inside = false
+  const n = polygon.length
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const [xi, yi] = polygon[i]
+    const [xj, yj] = polygon[j]
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
 // ─── Zone Overlays ────────────────────────────────────────────────────────────
 // Primary rendering strategy — subdivision-based zone fills:
 //   1. Load Natural Earth admin-1 (states/provinces) from /admin1.json lazily
@@ -160,9 +174,11 @@ type Admin1Feature = GeoJSON.Feature & {
 function ZoneOverlays({
   territories,
   countryFeatures = [],
+  ownerColors = {},
 }: {
   territories:     Territory[]
   countryFeatures: GeoJSON.Feature[]
+  ownerColors?:    Record<string, string>
 }) {
   // Raw TopoJSON stored so mesh() can query arc-level adjacency
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -325,6 +341,10 @@ function ZoneOverlays({
       if (subdivs.length > 0 && admin1Topo) {
         // ── SUBDIVISION MODE: each state/province gets its zone colour ──────────
 
+        // gi → territory lookup for owner-colour support
+        const giToTerritory = new Map<number, Territory>()
+        entries.forEach(({ territory, gi }: { territory: Territory; gi: number }) => giToTerritory.set(gi, territory))
+
         // Pre-compute zone gi for every subdivision in this country (by feature id)
         const subdivZoneMap = new Map<string, number>()
         for (const sub of subdivs) {
@@ -354,8 +374,9 @@ function ZoneOverlays({
         for (const sub of subdivs) {
           if (!sub.geometry) continue
           const gi = subdivZoneMap.get(String(sub.id)) ?? entries[0].gi
+          const t = giToTerritory.get(gi)
           traceGeo(sub.geometry)
-          ctx.fillStyle = ZONE_PALETTE[gi % ZONE_PALETTE.length] + 'CC'
+          ctx.fillStyle = (t ? (ownerColors[t.id] ?? ZONE_PALETTE[gi % ZONE_PALETTE.length]) : ZONE_PALETTE[gi % ZONE_PALETTE.length]) + 'CC'
           ctx.fill('evenodd')
         }
 
@@ -426,7 +447,7 @@ function ZoneOverlays({
           const pts = rawMap.get(territory.id)
           if (!pts) return
           tracePts(pts)
-          ctx.fillStyle = ZONE_PALETTE[gi % ZONE_PALETTE.length] + 'CC'
+          ctx.fillStyle = (ownerColors[territory.id] ?? ZONE_PALETTE[gi % ZONE_PALETTE.length]) + 'CC'
           ctx.fill()
         })
 
@@ -505,7 +526,7 @@ function ZoneOverlays({
     tex.anisotropy  = 16
     tex.needsUpdate = true
     return tex
-  }, [territories, countryFeatures, admin1, admin1Topo])
+  }, [territories, countryFeatures, admin1, admin1Topo, ownerColors])
 
   useEffect(() => { return () => { texture?.dispose() } }, [texture])
 
@@ -535,6 +556,89 @@ function ZoneOverlays({
     <mesh>
       <sphereGeometry args={[1.002, 256, 256]} />
       <meshBasicMaterial ref={matRef} map={texture} transparent depthWrite={false} opacity={0} />
+    </mesh>
+  )
+}
+
+// ─── Territory Army Badges ────────────────────────────────────────────────────
+
+export interface ArmyBadgeDef {
+  id:        string
+  lat:       number
+  lon:       number
+  armies:    number
+  color:     string
+  highlight?: string  // CSS color for glow ring, undefined = none
+}
+
+function TerritoryArmyBadges({ badges }: { badges: ArmyBadgeDef[] }) {
+  return (
+    <>
+      {badges.map((b) => {
+        const pos = latLonToVec3(b.lat, b.lon, 1.012)
+        return (
+          <Html key={b.id} position={pos} center zIndexRange={[0, 50]}>
+            <div style={{
+              width: '18px', height: '18px', borderRadius: '50%',
+              background: 'rgba(0,0,0,0.88)',
+              border: `1.5px solid ${b.color}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontFamily: 'Cinzel, serif', fontSize: '7px', fontWeight: 'bold',
+              boxShadow: b.highlight
+                ? `0 0 5px 2px ${b.highlight}`
+                : '0 1px 3px rgba(0,0,0,0.7)',
+              outline: b.highlight ? `1.5px solid ${b.highlight}` : 'none',
+              pointerEvents: 'none', userSelect: 'none',
+              whiteSpace: 'nowrap',
+            }}>
+              {b.armies}
+            </div>
+          </Html>
+        )
+      })}
+    </>
+  )
+}
+
+// ─── Territory Interaction Layer ──────────────────────────────────────────────
+// Transparent sphere mesh that intercepts clicks and maps them to territory IDs
+// via point-in-polygon tests in equirectangular (1200×600) space.
+
+function TerritoryInteraction({
+  territories,
+  onTerritoryClick,
+}: {
+  territories: Territory[]
+  onTerritoryClick: (id: string) => void
+}) {
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
+  const mat = useMemo(() => new THREE.MeshBasicMaterial({ visible: false, side: THREE.FrontSide }), [])
+
+  const handlePointerDown = useCallback((e: any) => {
+    pointerDownRef.current = { x: e.clientX, y: e.clientY }
+  }, [])
+
+  const handleClick = useCallback((e: any) => {
+    if (pointerDownRef.current) {
+      const dx = e.clientX - pointerDownRef.current.x
+      const dy = e.clientY - pointerDownRef.current.y
+      if (Math.sqrt(dx * dx + dy * dy) > 4) return
+    }
+    const [lat, lon] = vec3ToLatLon(e.point as THREE.Vector3)
+    const ex = (lon + 180) / 360 * 1200
+    const ey = (90 - lat) / 180 * 600
+    for (const t of territories) {
+      if (!t.polygon || t.polygon.length < 3) continue
+      if (pointInPolygon2D(ex, ey, t.polygon)) {
+        onTerritoryClick(t.id)
+        return
+      }
+    }
+  }, [territories, onTerritoryClick])
+
+  return (
+    <mesh material={mat} onPointerDown={handlePointerDown} onClick={handleClick}>
+      <sphereGeometry args={[1.003, 64, 64]} />
     </mesh>
   )
 }
@@ -999,6 +1103,12 @@ export interface EarthGlobeProps {
   /** Show continent name labels (default true) */
   showContinentLabels?:  boolean
   className?:            string
+  /** Override territory fill colors (territory id → CSS color) — used by game view */
+  ownerColors?:          Record<string, string>
+  /** Army count badges to render on the globe surface */
+  armyBadges?:           ArmyBadgeDef[]
+  /** Click handler for territory-level interaction */
+  onTerritoryClick?:     (id: string) => void
 }
 
 export default function EarthGlobe({
@@ -1018,6 +1128,9 @@ export default function EarthGlobe({
   showStars       = true,
   showContinentLabels = true,
   className      = 'w-full h-full',
+  ownerColors,
+  armyBadges,
+  onTerritoryClick,
 }: EarthGlobeProps) {
   const [worldData, setWorldData]       = useState<Topology | null>(null)
   const [globeReady, setGlobeReady]     = useState(false)
@@ -1118,7 +1231,7 @@ export default function EarthGlobe({
               featureMap={featureMap}
               selectionMode={selectionMode}
               selectedIds={selectedIds}
-              interactable={interactive}
+              interactable={interactive && !onTerritoryClick}
               onHoverChange={handleHoverChange}
               onContinentClick={handleContinentClick}
               onCountryClick={handleCountryClick}
@@ -1152,7 +1265,17 @@ export default function EarthGlobe({
             ZoneOverlays withholds rendering until admin1 data is loaded so the
             Voronoi fallback never flashes before the subdivision map is ready. */}
         {territories.length > 0 && (
-          <ZoneOverlays territories={territories} countryFeatures={countryFeatures} />
+          <ZoneOverlays territories={territories} countryFeatures={countryFeatures} ownerColors={ownerColors} />
+        )}
+
+        {/* Army badges — HTML elements pinned to territory seed lat/lon */}
+        {armyBadges && armyBadges.length > 0 && (
+          <TerritoryArmyBadges badges={armyBadges} />
+        )}
+
+        {/* Territory-level click interaction */}
+        {onTerritoryClick && territories.length > 0 && (
+          <TerritoryInteraction territories={territories} onTerritoryClick={onTerritoryClick} />
         )}
 
         {markers.length > 0 && <CityMarkers markers={markers} />}
