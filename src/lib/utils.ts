@@ -279,10 +279,19 @@ export function generateZonesFromCities(
   const bonusGroups:    BonusGroup[] = []
   let globalIdx = 0  // keeps territory IDs unique across countries
 
-  for (const [iso, countryCities] of citiesByIso) {
+  for (const [iso, countryCities] of Array.from(citiesByIso)) {
     const countryFeats = featsByIso.get(iso) ?? []
+    // Use equirectangular projection — same coordinate space as the canvas clip
+    // region (which is built from lon/lat via the same formula).  Mercator was
+    // causing a coordinate-system mismatch that left uncovered gaps near country
+    // borders, especially at high latitudes where Mercator distorts most.
+    const equiProj = (lon: number, lat: number): [number, number] => [
+      (lon + 180) / 360 * width,
+      (90  - lat) / 180 * height,
+    ]
+
     const seeds: [number, number][] = countryCities.map(
-      (c) => mercatorProject(c.lon, c.lat, width, height),
+      (c) => equiProj(c.lon, c.lat),
     )
 
     // Bounding box from this country's projected boundary rings
@@ -296,7 +305,7 @@ export function generateZonesFromCities(
         []
       for (const ring of outerRings) {
         for (const [lon, lat] of ring) {
-          const [x, y] = mercatorProject(lon, lat, width, height)
+          const [x, y] = equiProj(lon, lat)
           if (x < minX) minX = x; if (x > maxX) maxX = x
           if (y < minY) minY = y; if (y > maxY) maxY = y
         }
