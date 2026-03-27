@@ -427,7 +427,7 @@ export default function LobbyPage() {
         setHasMore(newGames.length === PAGE_SIZE)
 
         // Batch-fetch territory data for any map_ids we don't have cached yet
-        const uncached = [...new Set(newGames.map(g => g.map_id).filter(Boolean))]
+        const uncached = Array.from(new Set(newGames.map(g => g.map_id).filter(Boolean)))
           .filter(id => !mapCache[id])
         fetchMapData(uncached)
       }
