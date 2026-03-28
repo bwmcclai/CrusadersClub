@@ -11,6 +11,8 @@ import {
   type ContinentId, getCountryName, getContinent, getContinentCountryIds,
   CONTINENT_INFO,
 } from '@/lib/geoData'
+import { feature } from 'topojson-client'
+import { geoContains } from 'd3-geo'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import type { BonusGroup, Territory } from '@/types'
@@ -98,6 +100,50 @@ function computeRegionBounds(features: GeoJSON.Feature[]) {
   return { minLat, maxLat, minLon, maxLon }
 }
 
+// --- City deduplication by admin-1 subdivision --------------------------------
+// Ensures at most one city per state/province, keeping the most populous.
+// Cities whose country has no admin-1 data (small islands etc.) pass through.
+
+function deduplicateCitiesBySubdivision(
+  cities: CityFull[],             // sorted pop desc — first city per subdiv wins
+  admin1: GeoJSON.Feature[],
+): CityFull[] {
+  const byCountry = new Map<number, GeoJSON.Feature[]>()
+  for (const f of admin1) {
+    const iso = (f.properties as any)?.iso_n3 as number | undefined
+    if (!iso) continue
+    if (!byCountry.has(iso)) byCountry.set(iso, [])
+    byCountry.get(iso)!.push(f)
+  }
+
+  const claimed = new Set<string | number>()
+  const result: CityFull[] = []
+
+  for (const city of cities) {
+    const subdivs = byCountry.get(city.country)
+    if (!subdivs || subdivs.length === 0) {
+      result.push(city)
+      continue
+    }
+
+    let subdivId: string | number | null = null
+    for (const sub of subdivs) {
+      if (sub.id != null && geoContains(sub as any, [city.lon, city.lat])) {
+        subdivId = sub.id as string | number
+        break
+      }
+    }
+
+    if (subdivId === null || !claimed.has(subdivId)) {
+      if (subdivId !== null) claimed.add(subdivId)
+      result.push(city)
+    }
+    // else: a more-populous city already owns this state → skip
+  }
+
+  return result
+}
+
 // --- Small UI helpers ---------------------------------------------------------
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
@@ -177,6 +223,19 @@ export default function MapCreatorPage() {
   // -- Map metadata --------------------------------------------------------------
   const [meta, setMeta] = useState<MapMeta>({ name: '', desc: '' })
   const [zoneCount, setZoneCount] = useState(25)
+
+  // -- Admin-1 subdivision data (for city deduplication) ------------------------
+  const [admin1Features, setAdmin1Features] = useState<GeoJSON.Feature[] | null>(null)
+
+  useEffect(() => {
+    fetch('/admin1.json')
+      .then((r) => r.json())
+      .then((data) => {
+        const fc = feature(data as any, (data as any).objects.admin1) as unknown as GeoJSON.FeatureCollection
+        setAdmin1Features(fc.features)
+      })
+      .catch(() => setAdmin1Features([]))
+  }, [])
 
   // -- Generated output ----------------------------------------------------------
   const [generatedCities,      setGeneratedCities]      = useState<CityFull[]>([])
@@ -260,9 +319,13 @@ export default function MapCreatorPage() {
       return
     }
 
-    // Get all cities for selected countries sorted by population
+    // Get all cities for selected countries sorted by population,
+    // then deduplicate to one city per state/province (most populous wins).
     const allCities = getCitiesForCountries(selCountryIds)
-    const topCities = allCities.slice(0, Math.max(2, zoneCount))
+    const dedupedCities = admin1Features
+      ? deduplicateCitiesBySubdivision(allCities, admin1Features)
+      : allCities
+    const topCities = dedupedCities.slice(0, Math.max(2, zoneCount))
     setGeneratedCities(topCities)
 
     if (selCountryFeats.length === 0) {
@@ -273,7 +336,7 @@ export default function MapCreatorPage() {
     }
 
     // Generate Voronoi zones clipped to country boundaries
-    const result = generateZonesFromCities(allCities, selCountryFeats, zoneCount)
+    const result = generateZonesFromCities(dedupedCities, selCountryFeats, zoneCount)
 
     // Fix bonus group names (generateZonesFromCities uses placeholder names)
     const namedGroups: BonusGroup[] = result.bonusGroups.map((bg) => {
@@ -284,7 +347,7 @@ export default function MapCreatorPage() {
     setGeneratedTerritories(result.territories)
     setBonusGroups(namedGroups)
     setSavedId(null)
-  }, [selCountryIds, selCountryFeats, zoneCount])
+  }, [selCountryIds, selCountryFeats, zoneCount, admin1Features])
 
   // -- Preview toggle ------------------------------------------------------------
   function handleGenerate() {
