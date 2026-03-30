@@ -464,8 +464,20 @@ export default function GamePage() {
     setActionLock(true)
     setActionError(null)
     try {
+      // Validate adjacency before executing attack
+      const srcTerr = mapTerritories.find(t => t.id === attackFrom)
+      if (!srcTerr?.adjacent_ids?.includes(attackTo)) {
+        throw new Error('Invalid attack: territories are not adjacent')
+      }
+
       const srcTs = tsMap.get(attackFrom)!
       const tgtTs = tsMap.get(attackTo)!
+
+      // Validate ownership
+      if (srcTs.ownerId !== myGP?.id) throw new Error('Invalid attack: you do not own the source territory')
+      if (tgtTs.ownerId === myGP?.id) throw new Error('Invalid attack: cannot attack your own territory')
+      if (srcTs.armies < 2) throw new Error('Invalid attack: need at least 2 armies to attack')
+
       const atkCount = Math.min(attackDiceCount, srcTs.armies - 1)
       const defCount = Math.min(2, tgtTs.armies)
 

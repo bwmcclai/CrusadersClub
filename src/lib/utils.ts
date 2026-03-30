@@ -382,17 +382,33 @@ export function generateZonesFromCities(
   // Per-country Voronoi only connects territories within the same country.
   // Run a global Delaunay over all seeds so border territories across different
   // countries become adjacent to each other.
+  // We must filter by geographic distance to avoid false adjacencies caused by
+  // the equirectangular projection's antimeridian discontinuity (e.g. San Diego
+  // appearing adjacent to Tokyo because the projected x-coordinates wrap).
   if (allTerritories.length >= 2) {
     const allSeeds = allTerritories.map((t) => t.seed)
     const globalDelaunay = Delaunay.from(allSeeds)
+
+    // Maximum projected distance (in pixels) to accept a cross-country neighbor.
+    // Territories whose seeds are farther apart than this are rejected — they're
+    // likely artifacts of the flat projection connecting points across the
+    // antimeridian.  At 1200px width, 15% ≈ 54° of longitude.
+    const maxCrossCountryDist = width * 0.15
+
     for (let i = 0; i < allTerritories.length; i++) {
       for (const j of Array.from(globalDelaunay.neighbors(i))) {
         const t1 = allTerritories[i]
         const t2 = allTerritories[j]
-        if (t1.bonus_group !== t2.bonus_group) {
-          if (!t1.adjacent_ids.includes(t2.id)) t1.adjacent_ids.push(t2.id)
-          if (!t2.adjacent_ids.includes(t1.id)) t2.adjacent_ids.push(t1.id)
-        }
+        if (t1.bonus_group === t2.bonus_group) continue
+
+        // Reject Delaunay edges that span too far — likely antimeridian artifacts
+        const dx = allSeeds[i][0] - allSeeds[j][0]
+        const dy = allSeeds[i][1] - allSeeds[j][1]
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        if (dist > maxCrossCountryDist) continue
+
+        if (!t1.adjacent_ids.includes(t2.id)) t1.adjacent_ids.push(t2.id)
+        if (!t2.adjacent_ids.includes(t1.id)) t2.adjacent_ids.push(t1.id)
       }
     }
   }
