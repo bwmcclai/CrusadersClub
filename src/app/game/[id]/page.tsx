@@ -8,7 +8,7 @@ import { joinGame } from '@/lib/gameService'
 import { useAppStore } from '@/lib/store'
 import type { Territory, BonusGroup, GameMode } from '@/types'
 import type { ArmyBadgeDef } from '@/components/three/EarthGlobe'
-import { ArrowLeft, Sword, Shield, Crosshair, ArrowRightLeft, Crown, Dices } from 'lucide-react'
+import { ArrowLeft, Sword, Shield, Crosshair, ArrowRightLeft, Crown, Dices, Layers } from 'lucide-react'
 import Button from '@/components/ui/Button'
 
 const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), { ssr: false })
@@ -59,6 +59,12 @@ interface GameEvent {
   turnNumber: number
   createdAt: string
   gamePlayerId: string | null
+}
+
+interface CardData {
+  id: string
+  territoryId: string
+  cardType: 'infantry' | 'cavalry' | 'artillery' | 'wild'
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -202,6 +208,11 @@ export default function GamePage() {
   const [lastDice, setLastDice] = useState<{ attack_dice: number[]; defend_dice: number[]; attacker_losses: number; defender_losses: number } | null>(null)
   const [conqueredThisTurn, setConqueredThisTurn] = useState(false)
   const [actionLock, setActionLock] = useState(false)
+  const [myCards, setMyCards] = useState<CardData[]>([])
+  const [selectedCards, setSelectedCards] = useState<string[]>([])
+  const [showCards, setShowCards] = useState(false)
+  const [tradeCount, setTradeCount] = useState(0)
+  const [actionError, setActionError] = useState<string | null>(null)
   const botRunning = useRef(false)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -273,6 +284,9 @@ export default function GamePage() {
         })))
       }
 
+      // Fetch trade count from game settings
+      setTradeCount(gd.settings?.trade_count ?? 0)
+
       // Auto-join if waiting
       if (gd.status === 'waiting' && player) {
         try {
@@ -311,7 +325,23 @@ export default function GamePage() {
     }
   }
 
+  async function fetchMyCards() {
+    if (!myGP) return
+    const { data } = await sb.from('cards')
+      .select('id, territory_id, card_type')
+      .eq('game_id', gameId)
+      .eq('held_by_player_id', myGP.id)
+    if (data) {
+      setMyCards(data.map((c: any) => ({ id: c.id, territoryId: c.territory_id, cardType: c.card_type })))
+    }
+  }
+
   useEffect(() => { fetchAll() }, [gameId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch cards when player is known and turn changes
+  useEffect(() => {
+    if (myGP && game?.status === 'active') fetchMyCards()
+  }, [myGP?.id, game?.turnNumber]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Calculate deploy armies when turn starts ────────────────────────────────
   useEffect(() => {
@@ -406,11 +436,13 @@ export default function GamePage() {
   // ── Deploy action ───────────────────────────────────────────────────────────
   async function doDeploy(tid: string) {
     setActionLock(true)
+    setActionError(null)
     try {
       const ts = tsMap.get(tid)!
-      await sb.from('territory_states')
+      const { error: uErr } = await sb.from('territory_states')
         .update({ armies: ts.armies + 1 })
         .eq('game_id', gameId).eq('territory_id', tid)
+      if (uErr) throw uErr
       setTsList(prev => prev.map(t => t.territoryId === tid ? { ...t, armies: t.armies + 1 } : t))
       const newLeft = deployLeft - 1
       setDeployLeft(newLeft)
@@ -421,6 +453,8 @@ export default function GamePage() {
       })
 
       if (newLeft <= 0) setPhase('attack')
+    } catch (err: any) {
+      setActionError(err?.message ?? 'Deploy failed')
     } finally { setActionLock(false) }
   }
 
@@ -428,6 +462,7 @@ export default function GamePage() {
   async function doAttack() {
     if (!attackFrom || !attackTo || actionLock) return
     setActionLock(true)
+    setActionError(null)
     try {
       const srcTs = tsMap.get(attackFrom)!
       const tgtTs = tsMap.get(attackTo)!
@@ -495,6 +530,8 @@ export default function GamePage() {
         game_id: gameId, game_player_id: myGP!.id, event_type: 'attack', turn_number: game!.turnNumber,
         event_data: { from: attackFrom, to: attackTo, ...dice, conquered: newTgtArmies <= 0 },
       })
+    } catch (err: any) {
+      setActionError(err?.message ?? 'Attack failed')
     } finally { setActionLock(false) }
   }
 
@@ -502,6 +539,7 @@ export default function GamePage() {
   async function doFortify() {
     if (!fortifyFrom || !fortifyTo || actionLock) return
     setActionLock(true)
+    setActionError(null)
     try {
       const src = tsMap.get(fortifyFrom)!
       const tgt = tsMap.get(fortifyTo)!
@@ -521,12 +559,114 @@ export default function GamePage() {
       })
       // End turn after fortify
       await advanceTurn()
+    } catch (err: any) {
+      setActionError(err?.message ?? 'Fortify failed')
+    } finally { setActionLock(false) }
+  }
+
+  // ── Card trading ────────────────────────────────────────────────────────────
+  function isValidCardSet(cards: CardData[]): boolean {
+    if (cards.length !== 3) return false
+    const types = cards.map(c => c.cardType)
+    const wilds = types.filter(t => t === 'wild').length
+    const nonWild = types.filter(t => t !== 'wild')
+    // Three of a kind
+    if (nonWild.length + wilds === 3 && new Set(nonWild).size <= 1) return true
+    // One of each
+    if (wilds === 0 && new Set(types).size === 3) return true
+    // With wilds filling in
+    if (wilds >= 1) {
+      const unique = new Set(nonWild)
+      if (unique.size + wilds >= 3) return true
+    }
+    return false
+  }
+
+  function toggleCardSelection(cardId: string) {
+    setSelectedCards(prev => {
+      if (prev.includes(cardId)) return prev.filter(id => id !== cardId)
+      if (prev.length >= 3) return prev
+      return [...prev, cardId]
+    })
+  }
+
+  async function tradeCards() {
+    if (selectedCards.length !== 3 || !myGP || actionLock) return
+    const selected = myCards.filter(c => selectedCards.includes(c.id))
+    if (!isValidCardSet(selected)) return
+
+    setActionLock(true)
+    try {
+      // Calculate armies from trade using RPC
+      const spoilsMode = game?.settings?.spoils_mode ?? 'escalating'
+      const { data: armies, error: rpcErr } = await sb.rpc('card_trade_armies', {
+        trade_count: tradeCount + 1,
+        spoils_mode: spoilsMode,
+      })
+      if (rpcErr) throw rpcErr
+
+      // Return cards to deck
+      for (const cardId of selectedCards) {
+        await sb.from('cards').update({ held_by_player_id: null }).eq('id', cardId)
+      }
+
+      // Update card count
+      await sb.from('game_players').update({ card_count: Math.max(0, myCards.length - 3) })
+        .eq('game_id', gameId).eq('id', myGP.id)
+
+      // Increment trade count in game settings
+      const newTradeCount = tradeCount + 1
+      await sb.from('games').update({
+        settings: { ...game?.settings, trade_count: newTradeCount },
+      }).eq('id', gameId)
+      setTradeCount(newTradeCount)
+
+      // Add bonus armies to deploy
+      const bonusArmies = armies ?? 4
+      setDeployLeft(prev => prev + bonusArmies)
+
+      // Check for territory bonus: +2 if you own a territory on any traded card
+      let territoryBonus = 0
+      for (const card of selected) {
+        if (card.cardType !== 'wild' && tsMap.get(card.territoryId)?.ownerId === myGP.id) {
+          territoryBonus = 2
+          break
+        }
+      }
+      if (territoryBonus > 0) setDeployLeft(prev => prev + territoryBonus)
+
+      await sb.from('game_events').insert({
+        game_id: gameId, game_player_id: myGP.id, event_type: 'card_trade', turn_number: game!.turnNumber,
+        event_data: { cards_traded: selectedCards, armies_received: bonusArmies + territoryBonus },
+      })
+
+      setSelectedCards([])
+      setMyCards(prev => prev.filter(c => !selectedCards.includes(c.id)))
+      setShowCards(false)
     } finally { setActionLock(false) }
   }
 
   // ── End turn / advance ──────────────────────────────────────────────────────
   async function advanceTurn() {
     if (!game) return
+
+    // Draw a card if conquered a territory this turn
+    if (conqueredThisTurn && myGP) {
+      const { data: topCard } = await sb.from('cards')
+        .select('id, territory_id, card_type')
+        .eq('game_id', gameId)
+        .is('held_by_player_id', null)
+        .order('deck_position', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (topCard) {
+        await sb.from('cards').update({ held_by_player_id: myGP.id }).eq('id', topCard.id)
+        await sb.from('game_players').update({ card_count: myCards.length + 1 })
+          .eq('game_id', gameId).eq('id', myGP.id)
+        setMyCards(prev => [...prev, { id: topCard.id, territoryId: topCard.territory_id, cardType: topCard.card_type }])
+      }
+    }
+
     const activePlayers = players.filter(p => !p.isEliminated).sort((a, b) => a.turnOrder - b.turnOrder)
     const currentIdx = activePlayers.findIndex(p => p.id === game.currentTurnPlayerId)
     const nextPlayer = activePlayers[(currentIdx + 1) % activePlayers.length]
@@ -542,6 +682,7 @@ export default function GamePage() {
     setAttackFrom(null); setAttackTo(null)
     setFortifyFrom(null); setFortifyTo(null)
     setConqueredThisTurn(false); setLastDice(null)
+    setSelectedCards([])
   }
 
   async function skipToFortify() {
@@ -570,49 +711,67 @@ export default function GamePage() {
   }, [game?.currentTurnPlayerId, game?.turnNumber, game?.status]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function runBotTurn(botId: string) {
-    // Deploy: place armies on border territories
-    const deployCount = calcDeployArmies(botId, mapTerritories, bonusGroups, tsMap)
-    const myTs = tsList.filter(ts => ts.ownerId === botId)
-    const borders = myTs.filter(ts => {
-      const t = mapTerritories.find(mt => mt.id === ts.territoryId)
-      return t?.adjacent_ids?.some(aid => tsMap.get(aid)?.ownerId !== botId)
+    // Fetch fresh state to avoid stale data
+    const { data: freshTs } = await sb.from('territory_states')
+      .select('territory_id, owner_player_id, armies').eq('game_id', gameId)
+    if (!freshTs) return
+    const fresh = new Map(freshTs.map((r: any) => [r.territory_id, { territoryId: r.territory_id, ownerId: r.owner_player_id, armies: r.armies as number }]))
+
+    // ── Deploy: place armies on weakest border territories ──
+    const deployCount = calcDeployArmies(botId, mapTerritories, bonusGroups, fresh as any)
+    const botTerritories = freshTs.filter(t => t.owner_player_id === botId)
+    const borders = botTerritories.filter(ts => {
+      const t = mapTerritories.find(mt => mt.id === ts.territory_id)
+      return t?.adjacent_ids?.some(aid => fresh.get(aid)?.ownerId !== botId)
     })
-    const targets = borders.length > 0 ? borders : myTs
+    // Sort borders by weakest first (most in need of reinforcement)
+    const deployTargets = (borders.length > 0 ? borders : botTerritories)
+      .sort((a, b) => a.armies - b.armies)
+
     for (let i = 0; i < deployCount; i++) {
-      const pick = targets[Math.floor(Math.random() * targets.length)]
-      await sb.from('territory_states').update({ armies: (tsMap.get(pick.territoryId)?.armies ?? 1) + 1 })
-        .eq('game_id', gameId).eq('territory_id', pick.territoryId)
-      pick.armies = (pick.armies || 1) + 1
-      // Also update tsMap locally
-      setTsList(prev => prev.map(t => t.territoryId === pick.territoryId ? { ...t, armies: pick.armies } : t))
+      // Weight toward weaker territories
+      const pick = deployTargets[i % deployTargets.length]
+      const current = fresh.get(pick.territory_id)!
+      const newArmies = current.armies + 1
+      await sb.from('territory_states').update({ armies: newArmies })
+        .eq('game_id', gameId).eq('territory_id', pick.territory_id)
+      current.armies = newArmies
+      pick.armies = newArmies
+
+      await sb.from('game_events').insert({
+        game_id: gameId, game_player_id: botId, event_type: 'deploy', turn_number: game!.turnNumber,
+        event_data: { territory_id: pick.territory_id, armies_placed: 1 },
+      })
       await new Promise(r => setTimeout(r, 200))
     }
 
-    // Attack: up to 5 attacks with advantage
-    for (let atk = 0; atk < 5; atk++) {
-      // Re-read state
-      const { data: freshTs } = await sb.from('territory_states')
+    // ── Attack: up to 8 attacks, prefer high advantage ──
+    let conqueredAny = false
+    for (let atk = 0; atk < 8; atk++) {
+      // Re-read fresh state each attack
+      const { data: atkTs } = await sb.from('territory_states')
         .select('territory_id, owner_player_id, armies').eq('game_id', gameId)
-      if (!freshTs) break
-      const freshMap = new Map(freshTs.map((r: any) => [r.territory_id, { territoryId: r.territory_id, ownerId: r.owner_player_id, armies: r.armies }]))
+      if (!atkTs) break
+      const atkMap = new Map(atkTs.map((r: any) => [r.territory_id, { territoryId: r.territory_id, ownerId: r.owner_player_id, armies: r.armies as number }]))
 
-      // Find best attack
+      // Find best attack: greatest army advantage
       let bestSrc: string | null = null, bestTgt: string | null = null, bestAdv = 0
-      for (const ts of freshTs) {
+      for (const ts of atkTs) {
         if (ts.owner_player_id !== botId || ts.armies < 3) continue
         const terr = mapTerritories.find(t => t.id === ts.territory_id)
         for (const adj of terr?.adjacent_ids ?? []) {
-          const enemy = freshMap.get(adj)
+          const enemy = atkMap.get(adj)
           if (enemy && enemy.ownerId !== botId) {
             const advantage = ts.armies - enemy.armies
             if (advantage > bestAdv) { bestAdv = advantage; bestSrc = ts.territory_id; bestTgt = adj }
           }
         }
       }
+      // Only attack with advantage >= 1
       if (!bestSrc || !bestTgt || bestAdv < 1) break
 
-      const srcArmies = freshMap.get(bestSrc)!.armies
-      const tgtArmies = freshMap.get(bestTgt)!.armies
+      const srcArmies = atkMap.get(bestSrc)!.armies
+      const tgtArmies = atkMap.get(bestTgt)!.armies
       const atkCount = Math.min(3, srcArmies - 1)
       const defCount = Math.min(2, tgtArmies)
 
@@ -623,22 +782,28 @@ export default function GamePage() {
       const newTgt = tgtArmies - dice.defender_losses
 
       if (newTgt <= 0) {
-        const move = atkCount
+        // Territory conquered
+        conqueredAny = true
+        const move = Math.min(atkCount, newSrc - 1)
         await Promise.all([
           sb.from('territory_states').update({ armies: newSrc - move }).eq('game_id', gameId).eq('territory_id', bestSrc),
-          sb.from('territory_states').update({ owner_player_id: botId, armies: move }).eq('game_id', gameId).eq('territory_id', bestTgt),
+          sb.from('territory_states').update({ owner_player_id: botId, armies: Math.max(1, move) }).eq('game_id', gameId).eq('territory_id', bestTgt),
         ])
         // Check elimination
-        const defender = freshMap.get(bestTgt)!.ownerId
-        const defLeft = freshTs.filter(t => t.owner_player_id === defender && t.territory_id !== bestTgt).length
-        if (defLeft === 0 && defender) {
-          await sb.from('game_players').update({ is_eliminated: true }).eq('game_id', gameId).eq('id', defender)
+        const defenderId = atkMap.get(bestTgt)!.ownerId
+        const defLeft = atkTs.filter(t => t.owner_player_id === defenderId && t.territory_id !== bestTgt).length
+        if (defLeft === 0 && defenderId) {
+          await sb.from('game_players').update({ is_eliminated: true, eliminated_at: new Date().toISOString() }).eq('game_id', gameId).eq('id', defenderId)
         }
         // Check win
-        const botOwns = freshTs.filter(t => t.owner_player_id === botId).length + 1
+        const botOwns = atkTs.filter(t => t.owner_player_id === botId).length + 1
         if (botOwns >= mapTerritories.length) {
           const botPlayer = players.find(p => p.id === botId)
           await sb.from('games').update({ status: 'finished', winner_id: botPlayer?.playerId ?? null }).eq('id', gameId)
+          await sb.from('game_events').insert({
+            game_id: gameId, game_player_id: botId, event_type: 'win', turn_number: game!.turnNumber,
+            event_data: { winner_player_id: botPlayer?.playerId ?? null },
+          })
           return
         }
       } else {
@@ -655,7 +820,67 @@ export default function GamePage() {
       await new Promise(r => setTimeout(r, 600))
     }
 
-    // End bot turn
+    // ── Fortify: move armies from safest interior to weakest border ──
+    const { data: fortTs } = await sb.from('territory_states')
+      .select('territory_id, owner_player_id, armies').eq('game_id', gameId)
+    if (fortTs) {
+      const fortMap = new Map(fortTs.map((r: any) => [r.territory_id, { territoryId: r.territory_id, ownerId: r.owner_player_id, armies: r.armies as number }]))
+
+      // Interior territories (all neighbors are owned by bot)
+      const interior = fortTs
+        .filter(ts => ts.owner_player_id === botId && ts.armies > 1)
+        .filter(ts => {
+          const t = mapTerritories.find(mt => mt.id === ts.territory_id)
+          return t?.adjacent_ids?.every(aid => fortMap.get(aid)?.ownerId === botId)
+        })
+        .sort((a, b) => b.armies - a.armies)
+
+      // Border territories (weakest first)
+      const borderTs = fortTs
+        .filter(ts => ts.owner_player_id === botId)
+        .filter(ts => {
+          const t = mapTerritories.find(mt => mt.id === ts.territory_id)
+          return t?.adjacent_ids?.some(aid => fortMap.get(aid)?.ownerId !== botId)
+        })
+        .sort((a, b) => a.armies - b.armies)
+
+      if (interior.length > 0 && borderTs.length > 0) {
+        const src = interior[0]
+        const tgt = borderTs[0]
+        // Check BFS connectivity
+        if (areConnected(src.territory_id, tgt.territory_id, mapTerritories, botId, fortMap as any)) {
+          const moveAmt = src.armies - 1
+          if (moveAmt > 0) {
+            await Promise.all([
+              sb.from('territory_states').update({ armies: 1 }).eq('game_id', gameId).eq('territory_id', src.territory_id),
+              sb.from('territory_states').update({ armies: tgt.armies + moveAmt }).eq('game_id', gameId).eq('territory_id', tgt.territory_id),
+            ])
+            await sb.from('game_events').insert({
+              game_id: gameId, game_player_id: botId, event_type: 'fortify', turn_number: game!.turnNumber,
+              event_data: { from: src.territory_id, to: tgt.territory_id, armies_moved: moveAmt },
+            })
+          }
+        }
+      }
+    }
+
+    // ── Draw card if conquered a territory this turn ──
+    if (conqueredAny) {
+      const { data: topCard } = await sb.from('cards')
+        .select('id')
+        .eq('game_id', gameId)
+        .is('held_by_player_id', null)
+        .order('deck_position', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (topCard) {
+        await sb.from('cards').update({ held_by_player_id: botId }).eq('id', topCard.id)
+        await sb.from('game_players').update({ card_count: (players.find(p => p.id === botId)?.cardCount ?? 0) + 1 })
+          .eq('game_id', gameId).eq('id', botId)
+      }
+    }
+
+    // ── End bot turn ──
     const activePlayers = players.filter(p => !p.isEliminated).sort((a, b) => a.turnOrder - b.turnOrder)
     const curIdx = activePlayers.findIndex(p => p.id === botId)
     const nextP = activePlayers[(curIdx + 1) % activePlayers.length]
@@ -821,14 +1046,78 @@ export default function GamePage() {
         {/* ── Right sidebar ──────────────────────────────────────────────── */}
         <div className="w-72 flex flex-col border-l border-crusader-gold/10 overflow-hidden" style={{ background: 'rgba(6,5,3,0.92)' }}>
 
+          {/* Action error */}
+          {actionError && (
+            <div className="shrink-0 px-4 py-2 bg-red-900/20 border-b border-red-400/20">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-cinzel text-red-400">{actionError}</p>
+                <button onClick={() => setActionError(null)} className="text-red-400/50 hover:text-red-400 text-xs ml-2">&times;</button>
+              </div>
+            </div>
+          )}
+
           {/* Action panel */}
           {isMyTurn && (
             <div className="shrink-0 p-4 border-b border-crusader-gold/10 space-y-3">
               {phase === 'deploy' && (
-                <div className="text-center">
-                  <p className="font-cinzel text-xs text-crusader-gold/60 mb-1">Click your territories to deploy</p>
-                  <p className="font-cinzel text-2xl font-bold text-crusader-gold">{deployLeft}</p>
-                  <p className="font-cinzel text-[10px] text-crusader-gold/35 tracking-widest">ARMIES REMAINING</p>
+                <div className="text-center space-y-3">
+                  <div>
+                    <p className="font-cinzel text-xs text-crusader-gold/60 mb-1">Click your territories to deploy</p>
+                    <p className="font-cinzel text-2xl font-bold text-crusader-gold">{deployLeft}</p>
+                    <p className="font-cinzel text-[10px] text-crusader-gold/35 tracking-widest">ARMIES REMAINING</p>
+                  </div>
+                  {myCards.length > 0 && (
+                    <button
+                      onClick={() => setShowCards(!showCards)}
+                      className="flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded border border-crusader-gold/20 hover:border-crusader-gold/40 transition-colors"
+                    >
+                      <Layers size={12} className="text-crusader-gold/60" />
+                      <span className="text-[10px] font-cinzel text-crusader-gold/60">
+                        Cards ({myCards.length})
+                      </span>
+                    </button>
+                  )}
+                  {showCards && (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-1.5 justify-center">
+                        {myCards.map(card => {
+                          const isSelected = selectedCards.includes(card.id)
+                          const typeIcon = card.cardType === 'infantry' ? '♟' : card.cardType === 'cavalry' ? '♞' : card.cardType === 'artillery' ? '♜' : '★'
+                          const typeColor = card.cardType === 'infantry' ? 'border-green-400/40 bg-green-400/10' : card.cardType === 'cavalry' ? 'border-blue-400/40 bg-blue-400/10' : card.cardType === 'artillery' ? 'border-red-400/40 bg-red-400/10' : 'border-yellow-400/40 bg-yellow-400/10'
+                          return (
+                            <button
+                              key={card.id}
+                              onClick={() => toggleCardSelection(card.id)}
+                              className={`w-12 h-16 rounded border-2 flex flex-col items-center justify-center gap-0.5 transition-all ${typeColor} ${
+                                isSelected ? 'ring-2 ring-crusader-gold scale-105' : 'opacity-70 hover:opacity-100'
+                              }`}
+                            >
+                              <span className="text-lg">{typeIcon}</span>
+                              <span className="text-[7px] font-cinzel text-crusader-gold/50 uppercase leading-none">{card.cardType === 'wild' ? 'Wild' : card.cardType.slice(0, 3)}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {selectedCards.length === 3 && (
+                        <Button
+                          fullWidth size="sm"
+                          onClick={tradeCards}
+                          loading={actionLock}
+                          disabled={!isValidCardSet(myCards.filter(c => selectedCards.includes(c.id)))}
+                          className="!bg-crusader-gold/20 !border-crusader-gold/40 !text-crusader-gold"
+                        >
+                          {isValidCardSet(myCards.filter(c => selectedCards.includes(c.id)))
+                            ? 'Trade Cards for Armies'
+                            : 'Invalid Set'}
+                        </Button>
+                      )}
+                      {selectedCards.length < 3 && (
+                        <p className="text-[9px] font-cinzel text-crusader-gold/30 text-center">
+                          Select 3 cards: three of a kind or one of each
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
