@@ -118,7 +118,7 @@ function calcDeployArmies(
 function GameGlobeMap({
   territories, tsMap, playerMap,
   attackFrom, attackTo, fortifyFrom, fortifyTo,
-  isMyTurn, onClick,
+  isMyTurn, onClick, deployFlash,
 }: {
   territories: Territory[]
   tsMap: Map<string, TS>
@@ -129,6 +129,7 @@ function GameGlobeMap({
   fortifyTo: string | null
   isMyTurn: boolean
   onClick: (id: string) => void
+  deployFlash?: { tid: string; count: number; key: number } | null
 }) {
   const ownerColors = useMemo(() => {
     const result: Record<string, string> = {}
@@ -158,9 +159,32 @@ function GameGlobeMap({
       else if (attackFrom && !attackTo && attackFromAdj.has(t.id) && ts?.ownerId !== tsMap.get(attackFrom)?.ownerId) highlight = '#FF6666'
       else if (fortifyFrom === t.id) highlight = '#00FF88'
       else if (fortifyTo === t.id) highlight = '#00AAFF'
-      return { id: t.id, lat, lon, armies: ts?.armies ?? 0, color: owner?.color ?? '#555', highlight }
+      const flash = deployFlash?.tid === t.id ? deployFlash : undefined
+      // Temporarily show a gold ring on the deployed territory — fades via CSS transition
+      if (!highlight && flash) highlight = '#FFE040'
+      return {
+        id: t.id, lat, lon, armies: ts?.armies ?? 0, color: owner?.color ?? '#555', highlight,
+        flashKey: flash?.key, flashCount: flash?.count,
+      }
     })
-  }, [territories, tsMap, playerMap, attackFrom, attackTo, fortifyFrom, fortifyTo, attackFromAdj])
+  }, [territories, tsMap, playerMap, attackFrom, attackTo, fortifyFrom, fortifyTo, attackFromAdj, deployFlash])
+
+  // Cannon arc: computed when both attacker and target are selected
+  const cannonArc = useMemo(() => {
+    if (!attackFrom || !attackTo) return null
+    const src = territories.find(t => t.id === attackFrom)
+    const tgt = territories.find(t => t.id === attackTo)
+    if (!src || !tgt) return null
+    const srcTs = tsMap.get(attackFrom)
+    const markerColor = srcTs?.ownerId ? (playerMap.get(srcTs.ownerId)?.color ?? '#D4961C') : '#D4961C'
+    return {
+      fromLat: 90 - src.seed[1] / 600 * 180,
+      fromLon: src.seed[0] / 1200 * 360 - 180,
+      toLat:   90 - tgt.seed[1] / 600 * 180,
+      toLon:   tgt.seed[0] / 1200 * 360 - 180,
+      markerColor,
+    }
+  }, [attackFrom, attackTo, territories, tsMap, playerMap])
 
   // Center the globe on the centroid of the map's territories
   const focusLatLon = useMemo((): [number, number] | undefined => {
@@ -181,6 +205,7 @@ function GameGlobeMap({
       showContinentLabels={false}
       cameraDistance={2.2}
       focusLatLon={focusLatLon}
+      cannonArc={cannonArc}
       className="w-full h-full"
     />
   )
@@ -225,7 +250,9 @@ export default function GamePage() {
   const [tradeCount, setTradeCount] = useState(0)
   const [actionError, setActionError] = useState<string | null>(null)
   const [deployPopup, setDeployPopup] = useState<{ tid: string; count: number } | null>(null)
+  const [deployFlash, setDeployFlash] = useState<{ tid: string; count: number; key: number } | null>(null)
   const botRunning = useRef(false)
+  const currentTurnPlayerIdRef = useRef<string | null>(null)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const tsMap = useMemo(() => {
@@ -355,13 +382,27 @@ export default function GamePage() {
     if (myGP && game?.status === 'active') fetchMyCards()
   }, [myGP?.id, game?.turnNumber]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Calculate deploy armies when turn starts ────────────────────────────────
+  // ── Restore or initialize phase/deployLeft when it's our turn ────────────────
   useEffect(() => {
-    if (game?.status === 'active' && isMyTurn && phase === 'deploy' && mapTerritories.length && tsMap.size) {
-      const armies = calcDeployArmies(myGP!.id, mapTerritories, bonusGroups, tsMap)
-      setDeployLeft(armies)
+    if (!game || game.status !== 'active' || !isMyTurn || !mapTerritories.length || !tsMap.size || !myGP) return
+    currentTurnPlayerIdRef.current = game.currentTurnPlayerId
+
+    const savedPhase = game.settings?.current_phase as Phase | undefined
+    const savedDeployLeft = game.settings?.deploy_armies_remaining as number | undefined
+
+    if (savedPhase && savedPhase !== 'deploy') {
+      // Resume mid-turn at attack or fortify phase
+      setPhase(savedPhase)
+      return
     }
-  }, [game?.currentTurnPlayerId, game?.turnNumber, phase, tsMap.size]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    setPhase('deploy')
+    if (savedDeployLeft !== undefined && savedDeployLeft !== null) {
+      setDeployLeft(savedDeployLeft)
+    } else {
+      setDeployLeft(calcDeployArmies(myGP.id, mapTerritories, bonusGroups, tsMap))
+    }
+  }, [game?.currentTurnPlayerId, game?.turnNumber, tsMap.size]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime subscriptions ──────────────────────────────────────────────────
   useEffect(() => {
@@ -376,16 +417,20 @@ export default function GamePage() {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` }, (payload) => {
         const r = payload.new as any
+        const turnChanged = r.current_turn_player_id !== currentTurnPlayerIdRef.current
+        if (turnChanged) {
+          currentTurnPlayerIdRef.current = r.current_turn_player_id
+          setPhase('deploy')
+          setAttackFrom(null); setAttackTo(null)
+          setFortifyFrom(null); setFortifyTo(null)
+          setConqueredThisTurn(false); setLastDice(null)
+        }
         setGame(prev => prev ? {
           ...prev, status: r.status, currentPlayers: r.current_players,
           currentTurnPlayerId: r.current_turn_player_id, turnNumber: r.turn_number,
           turnDeadline: r.turn_deadline, winnerId: r.winner_id,
+          settings: r.settings ?? prev.settings,
         } : null)
-        // Reset phase for new turn
-        setPhase('deploy')
-        setAttackFrom(null); setAttackTo(null)
-        setFortifyFrom(null); setFortifyTo(null)
-        setConqueredThisTurn(false); setLastDice(null)
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_events', filter: `game_id=eq.${gameId}` }, (payload) => {
         const e = payload.new as any
@@ -445,6 +490,14 @@ export default function GamePage() {
     }
   }, [isMyTurn, actionLock, myGP, phase, deployLeft, attackFrom, attackTo, fortifyFrom, fortifyTo, tsMap, mapTerritories]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Persist turn phase/deploy state to games.settings ──────────────────────
+  async function saveGameSettings(updates: Record<string, any>) {
+    if (!game) return
+    const newSettings = { ...game.settings, ...updates }
+    await sb.from('games').update({ settings: newSettings }).eq('id', gameId)
+    setGame(prev => prev ? { ...prev, settings: newSettings } : null)
+  }
+
   // ── Deploy action ───────────────────────────────────────────────────────────
   async function doDeploy(tid: string, count: number) {
     setActionLock(true)
@@ -456,6 +509,7 @@ export default function GamePage() {
         .eq('game_id', gameId).eq('territory_id', tid)
       if (uErr) throw uErr
       setTsList(prev => prev.map(t => t.territoryId === tid ? { ...t, armies: t.armies + count } : t))
+      setDeployFlash({ tid, count, key: Date.now() })
       const newLeft = deployLeft - count
       setDeployLeft(newLeft)
 
@@ -464,7 +518,12 @@ export default function GamePage() {
         event_data: { territory_id: tid, armies_placed: count },
       })
 
-      if (newLeft <= 0) setPhase('attack')
+      if (newLeft <= 0) {
+        await saveGameSettings({ current_phase: 'attack', deploy_armies_remaining: 0 })
+        setPhase('attack')
+      } else {
+        await saveGameSettings({ current_phase: 'deploy', deploy_armies_remaining: newLeft })
+      }
     } catch (err: any) {
       setActionError(err?.message ?? 'Deploy failed')
     } finally { setActionLock(false) }
@@ -493,6 +552,13 @@ export default function GamePage() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [deployPopup, deployLeft]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-clear deployFlash after animation completes
+  useEffect(() => {
+    if (!deployFlash) return
+    const t = setTimeout(() => setDeployFlash(null), 1100)
+    return () => clearTimeout(t)
+  }, [deployFlash])
 
   // ── Attack action ───────────────────────────────────────────────────────────
   async function doAttack() {
@@ -720,10 +786,12 @@ export default function GamePage() {
     const nextPlayer = activePlayers[(currentIdx + 1) % activePlayers.length]
 
     const deadlineMs = game.mode === 'lightning' ? 60_000 : game.mode === 'slow_hour' ? 3_600_000 : 86_400_000
+    const { current_phase: _cp, deploy_armies_remaining: _dar, ...restSettings } = game.settings ?? {}
     await sb.from('games').update({
       current_turn_player_id: nextPlayer.id,
       turn_number: game.turnNumber + 1,
       turn_deadline: new Date(Date.now() + deadlineMs).toISOString(),
+      settings: restSettings,
     }).eq('id', gameId)
 
     setPhase('deploy')
@@ -734,6 +802,7 @@ export default function GamePage() {
   }
 
   async function skipToFortify() {
+    await saveGameSettings({ current_phase: 'fortify' })
     setPhase('fortify')
     setAttackFrom(null); setAttackTo(null); setLastDice(null)
   }
@@ -1155,6 +1224,7 @@ export default function GamePage() {
             fortifyFrom={fortifyFrom} fortifyTo={fortifyTo}
             isMyTurn={isMyTurn}
             onClick={handleTerritoryClick}
+            deployFlash={deployFlash}
           />
 
           {/* ── Deploy popup ─────────────────────────────────────────────────── */}

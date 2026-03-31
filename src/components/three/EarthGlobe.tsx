@@ -30,21 +30,21 @@ const ZONE_PALETTE = [
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function latLonToVec3(lat: number, lon: number, r = 1): THREE.Vector3 {
-  const phi   = (90 - lat)  * (Math.PI / 180)
+  const phi = (90 - lat) * (Math.PI / 180)
   const theta = (lon + 180) * (Math.PI / 180)
   return new THREE.Vector3(
     -r * Math.sin(phi) * Math.cos(theta),
-     r * Math.cos(phi),
-     r * Math.sin(phi) * Math.sin(theta),
+    r * Math.cos(phi),
+    r * Math.sin(phi) * Math.sin(theta),
   )
 }
 
 function vec3ToLatLon(p: THREE.Vector3): [number, number] {
-  const n   = p.clone().normalize()
+  const n = p.clone().normalize()
   const lat = Math.asin(n.y) * (180 / Math.PI)
-  let   lon = Math.atan2(n.z, -n.x) * (180 / Math.PI) - 180
+  let lon = Math.atan2(n.z, -n.x) * (180 / Math.PI) - 180
   if (lon < -180) lon += 360
-  if (lon >  180) lon -= 360
+  if (lon > 180) lon -= 360
   return [lat, lon]
 }
 
@@ -54,9 +54,9 @@ function ringToPoints(ring: number[][], r = 1.002): THREE.Vector3[] {
 
 /** Inverse Mercator — pixel (x,y) at projection size w×h → [lon, lat] */
 function invMercator(x: number, y: number, w = 1200, h = 600): [number, number] {
-  const lon   = x * 360 / w - 180
+  const lon = x * 360 / w - 180
   const mercN = (h / 2 - y) * (2 * Math.PI) / w
-  const lat   = (2 * Math.atan(Math.exp(mercN)) - Math.PI / 2) * (180 / Math.PI)
+  const lat = (2 * Math.atan(Math.exp(mercN)) - Math.PI / 2) * (180 / Math.PI)
   return [lon, lat]
 }
 
@@ -104,8 +104,8 @@ function polyCentroid(pts: [number, number][]): [number, number] {
     const [x1, y1] = pts[(i + 1) % n]
     const cross = x0 * y1 - x1 * y0
     area += cross
-    cx   += (x0 + x1) * cross
-    cy   += (y0 + y1) * cross
+    cx += (x0 + x1) * cross
+    cy += (y0 + y1) * cross
   }
   area /= 2
   if (Math.abs(area) < 0.001) {
@@ -176,9 +176,9 @@ function ZoneOverlays({
   countryFeatures = [],
   ownerColors = {},
 }: {
-  territories:     Territory[]
+  territories: Territory[]
   countryFeatures: GeoJSON.Feature[]
-  ownerColors?:    Record<string, string>
+  ownerColors?: Record<string, string>
 }) {
   // Raw TopoJSON stored so mesh() can query arc-level adjacency
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -206,7 +206,7 @@ function ZoneOverlays({
         console.error('Failed to load admin1.json, using Voronoi fallback', err)
         setAdmin1Loaded(true)  // show Voronoi fallback on error
       })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [territories.length])
 
   const texture = useMemo(() => {
@@ -214,7 +214,7 @@ function ZoneOverlays({
 
     const W = 8192, H = 4096
     const canvas = document.createElement('canvas')
-    canvas.width  = W
+    canvas.width = W
     canvas.height = H
     const ctx = canvas.getContext('2d')!
 
@@ -223,7 +223,7 @@ function ZoneOverlays({
     // lon/lat → canvas pixel (equirectangular)
     const lonLatToCanvas = (lon: number, lat: number): [number, number] => [
       (lon + 180) / 360 * W,
-      (90  - lat) / 180 * H,
+      (90 - lat) / 180 * H,
     ]
 
     // Voronoi equirectangular base (1200×600) → canvas pixel
@@ -247,9 +247,9 @@ function ZoneOverlays({
     const traceGeo = (geo: GeoJSON.Geometry) => {
       ctx.beginPath()
       const rings: number[][][] =
-        geo.type === 'Polygon'      ? geo.coordinates as number[][][] :
-        geo.type === 'MultiPolygon' ? (geo.coordinates as number[][][][]).flat() :
-        []
+        geo.type === 'Polygon' ? geo.coordinates as number[][][] :
+          geo.type === 'MultiPolygon' ? (geo.coordinates as number[][][][]).flat() :
+            []
       for (const ring of rings) {
         ring.forEach(([lon, lat], j) => {
           const [px, py] = lonLatToCanvas(lon, lat)
@@ -265,9 +265,9 @@ function ZoneOverlays({
       for (const feat of feats) {
         if (!feat.geometry) continue
         const rings: number[][][] =
-          feat.geometry.type === 'Polygon'      ? feat.geometry.coordinates as number[][][] :
-          feat.geometry.type === 'MultiPolygon' ? (feat.geometry.coordinates as number[][][][]).flat() :
-          []
+          feat.geometry.type === 'Polygon' ? feat.geometry.coordinates as number[][][] :
+            feat.geometry.type === 'MultiPolygon' ? (feat.geometry.coordinates as number[][][][]).flat() :
+              []
         for (const ring of rings) {
           ring.forEach(([lon, lat], j) => {
             const [px, py] = lonLatToCanvas(lon, lat)
@@ -318,7 +318,7 @@ function ZoneOverlays({
     // Territory seeds are stored in base equirectangular 1200×600 space.
     const assignZone = (entries: { territory: Territory; gi: number }[], clon: number, clat: number): number => {
       const cx = (clon + 180) / 360 * 1200
-      const cy = (90   - clat) / 180 * 600
+      const cy = (90 - clat) / 180 * 600
       let bestGi = entries[0].gi, bestD = Infinity
       for (const { territory, gi } of entries) {
         const [sx, sy] = territory.seed
@@ -330,7 +330,7 @@ function ZoneOverlays({
 
     // ── Render each country group ─────────────────────────────────────────────
     for (const [key, entries] of Array.from(byCountry)) {
-      const feats  = featsByGroup.get(key) ?? (key === '__all__' ? countryFeatures : [])
+      const feats = featsByGroup.get(key) ?? (key === '__all__' ? countryFeatures : [])
       const isoNum = parseInt(key.replace('bonus-', ''))
       const subdivs = admin1ByIso.get(isoNum) ?? []
 
@@ -411,7 +411,7 @@ function ZoneOverlays({
               })
             }
           } else if (zoneBorders.type === 'LineString') {
-            ;(zoneBorders.coordinates as unknown as number[][]).forEach(([lon, lat], j) => {
+            ; (zoneBorders.coordinates as unknown as number[][]).forEach(([lon, lat], j) => {
               const [px, py] = lonLatToCanvas(lon, lat)
               j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
             })
@@ -420,21 +420,21 @@ function ZoneOverlays({
 
         // Pass 2 — glow only on zone-boundary arcs
         ctx.save()
-        ctx.filter      = 'blur(6px)'
-        ctx.lineJoin    = 'round'
-        ctx.lineCap     = 'round'
+        ctx.filter = 'blur(6px)'
+        ctx.lineJoin = 'round'
+        ctx.lineCap = 'round'
         traceZoneBorders()
         ctx.strokeStyle = 'rgba(255, 228, 130, 0.50)'
-        ctx.lineWidth   = 22
+        ctx.lineWidth = 22
         ctx.stroke()
         ctx.restore()
 
         // Pass 3 — crisp gold line only on zone-boundary arcs
-        ctx.lineJoin    = 'round'
-        ctx.lineCap     = 'round'
+        ctx.lineJoin = 'round'
+        ctx.lineCap = 'round'
         traceZoneBorders()
         ctx.strokeStyle = 'rgba(215, 175, 60, 0.97)'
-        ctx.lineWidth   = 5
+        ctx.lineWidth = 5
         ctx.stroke()
 
         // ── Orphan patch: sub-Voronoi fill for zones that won no subdivision ─
@@ -476,7 +476,7 @@ function ZoneOverlays({
             for (const [subId, subOrphans] of Array.from(subOrphanMap)) {
               const sub = subdivs.find((s) => String(s.id) === subId)
               if (!sub?.geometry) continue
-              const winnerGi  = subdivZoneMap.get(subId)
+              const winnerGi = subdivZoneMap.get(subId)
               const winnerEntry = winnerGi !== undefined ? giToEntry.get(winnerGi) : undefined
 
               ctx.save()
@@ -510,14 +510,14 @@ function ZoneOverlays({
               // Gold borders between all zones competing in this subdivision
               const allInSub = [winnerEntry, ...subOrphans].filter(Boolean) as { territory: Territory; gi: number }[]
               ctx.save()
-              ctx.filter   = 'blur(6px)'
+              ctx.filter = 'blur(6px)'
               ctx.lineJoin = 'round'; ctx.lineCap = 'round'
               allInSub.forEach(({ territory }) => {
                 const pts = rawMap.get(territory.id)
                 if (!pts) return
                 tracePts(chaikinSmooth(pts, 4))
                 ctx.strokeStyle = 'rgba(255, 228, 130, 0.50)'
-                ctx.lineWidth   = 22
+                ctx.lineWidth = 22
                 ctx.stroke()
               })
               ctx.restore()
@@ -527,7 +527,7 @@ function ZoneOverlays({
                 if (!pts) return
                 tracePts(chaikinSmooth(pts, 4))
                 ctx.strokeStyle = 'rgba(215, 175, 60, 0.97)'
-                ctx.lineWidth   = 5
+                ctx.lineWidth = 5
                 ctx.stroke()
               })
 
@@ -547,14 +547,14 @@ function ZoneOverlays({
                 zoneLabelPos.set(gi, [territory.seed[0] * SX, territory.seed[1] * SY])
               })
               ctx.save()
-              ctx.filter   = 'blur(5px)'
+              ctx.filter = 'blur(5px)'
               ctx.lineJoin = 'round'
               unhandledOrphans.forEach(({ territory }) => {
                 const pts = rawMap.get(territory.id)
                 if (!pts) return
                 tracePts(chaikinSmooth(pts, 4))
                 ctx.strokeStyle = 'rgba(255, 228, 130, 0.50)'
-                ctx.lineWidth   = 22
+                ctx.lineWidth = 22
                 ctx.stroke()
               })
               ctx.restore()
@@ -563,8 +563,8 @@ function ZoneOverlays({
                 if (!pts) return
                 tracePts(chaikinSmooth(pts, 4))
                 ctx.strokeStyle = 'rgba(215, 175, 60, 0.97)'
-                ctx.lineWidth   = 5
-                ctx.lineJoin    = 'round'
+                ctx.lineWidth = 5
+                ctx.lineJoin = 'round'
                 ctx.stroke()
               })
             }
@@ -591,14 +591,14 @@ function ZoneOverlays({
 
         // Pass 2 — glow
         ctx.save()
-        ctx.filter   = 'blur(5px)'
+        ctx.filter = 'blur(5px)'
         ctx.lineJoin = 'round'
         entries.forEach(({ territory }: { territory: Territory; gi: number }) => {
           const pts = rawMap.get(territory.id)
           if (!pts) return
           tracePts(chaikinSmooth(pts, 4))
           ctx.strokeStyle = 'rgba(255, 228, 130, 0.50)'
-          ctx.lineWidth   = 22
+          ctx.lineWidth = 22
           ctx.stroke()
         })
         ctx.restore()
@@ -609,8 +609,8 @@ function ZoneOverlays({
           if (!pts) return
           tracePts(chaikinSmooth(pts, 4))
           ctx.strokeStyle = 'rgba(215, 175, 60, 0.97)'
-          ctx.lineWidth   = 5
-          ctx.lineJoin    = 'round'
+          ctx.lineWidth = 5
+          ctx.lineJoin = 'round'
           ctx.stroke()
         })
       }
@@ -626,16 +626,16 @@ function ZoneOverlays({
 
         // Estimate zone size + orientation from the Voronoi polygon — it gives
         // a reasonable bounding shape even when fills come from subdivisions.
-        const pts  = rawMap.get(territory.id)
+        const pts = rawMap.get(territory.id)
         const area = pts ? polyArea(pts) : 0
         if (area < 1200) return
 
-        const rawAngle  = pts ? polyAngle(pts) : 0
+        const rawAngle = pts ? polyAngle(pts) : 0
         const drawAngle = ((rawAngle % Math.PI) + Math.PI * 1.5) % Math.PI - Math.PI / 2
-        const span      = pts ? polySpan(pts, drawAngle) : 0
+        const span = pts ? polySpan(pts, drawAngle) : 0
 
-        const fontSize    = Math.min(Math.max(Math.sqrt(area) * 0.065, 12), 52)
-        const name        = territory.name
+        const fontSize = Math.min(Math.max(Math.sqrt(area) * 0.065, 12), 52)
+        const name = territory.name
         const approxTextW = name.length * fontSize * 0.55
         if (span < approxTextW * 0.65) return
 
@@ -643,15 +643,15 @@ function ZoneOverlays({
         ctx.translate(lx, ly)
         ctx.rotate(drawAngle)
 
-        ctx.font         = `italic ${Math.round(fontSize)}px 'Palatino Linotype', Palatino, Georgia, serif`
-        ctx.textAlign    = 'center'
+        ctx.font = `italic ${Math.round(fontSize)}px 'Palatino Linotype', Palatino, Georgia, serif`
+        ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.shadowColor  = 'rgba(255, 255, 255, 0.6)'
-        ctx.shadowBlur   = fontSize * 0.7
-        ctx.fillStyle    = 'rgba(20, 12, 4, 0.88)'
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.6)'
+        ctx.shadowBlur = fontSize * 0.7
+        ctx.fillStyle = 'rgba(20, 12, 4, 0.88)'
         ctx.fillText(name, 0, 0)
-        ctx.shadowBlur   = 0
-        ctx.fillStyle    = 'rgba(35, 20, 8, 0.82)'
+        ctx.shadowBlur = 0
+        ctx.fillStyle = 'rgba(35, 20, 8, 0.82)'
         ctx.fillText(name, 0, 0)
 
         ctx.restore()
@@ -661,7 +661,7 @@ function ZoneOverlays({
     }
 
     const tex = new THREE.CanvasTexture(canvas)
-    tex.anisotropy  = 16
+    tex.anisotropy = 16
     tex.needsUpdate = true
     return tex
   }, [territories, countryFeatures, admin1, admin1Topo, ownerColors])
@@ -669,8 +669,8 @@ function ZoneOverlays({
   useEffect(() => { return () => { texture?.dispose() } }, [texture])
 
   // Fade-in animation: start at 0 opacity and ramp to 1 over ~0.5s
-  const matRef   = useRef<THREE.MeshBasicMaterial>(null!)
-  const fadeRef  = useRef(0)
+  const matRef = useRef<THREE.MeshBasicMaterial>(null!)
+  const fadeRef = useRef(0)
   const prevTexRef = useRef<THREE.CanvasTexture | null>(null)
 
   useFrame((_, delta) => {
@@ -701,69 +701,89 @@ function ZoneOverlays({
 // ─── Territory Army Badges ────────────────────────────────────────────────────
 
 export interface ArmyBadgeDef {
-  id:        string
-  lat:       number
-  lon:       number
-  armies:    number
-  color:     string
-  highlight?: string  // CSS color for glow ring, undefined = none
+  id: string
+  lat: number
+  lon: number
+  armies: number
+  color: string
+  highlight?: string   // CSS color for glow ring, undefined = none
+  flashKey?: number   // increments each deploy → triggers bounce + float animation
+  flashCount?: number   // armies just deployed, shown in floating label
 }
 
 function TerritoryArmyBadges({ badges, onBadgeClick }: { badges: ArmyBadgeDef[], onBadgeClick?: (id: string) => void }) {
   const { camera } = useThree()
 
-  // One normalized surface-normal per badge, recomputed only when badges change.
-  // These are unit vectors pointing outward from the globe at each badge location.
   const normals = useMemo(
     () => badges.map(b => latLonToVec3(b.lat, b.lon, 1).normalize()),
     [badges],
   )
 
-  // Direct refs to each badge's DOM element — updated imperatively each frame
-  // so React never re-renders just to change opacity.
   const divRefs = useRef<(HTMLDivElement | null)[]>([])
-
-  // Reusable vector to avoid per-frame allocations
   const camDir = useRef(new THREE.Vector3())
 
+  // Per-badge deploy bounce: id → { startTime ms, count }
+  const deployAnim = useRef<Map<string, { startTime: number; count: number }>>(new Map())
+  const lastFlashKey = useRef<Map<string, number>>(new Map())
+
+  // Inject @keyframes once into document.head for the floating "+N" counter
+  useEffect(() => {
+    const STYLE_ID = 'crusaders-deploy-anim'
+    if (document.getElementById(STYLE_ID)) return
+    const s = document.createElement('style')
+    s.id = STYLE_ID
+    s.textContent = `
+      @keyframes deployFloat {
+        0%   { opacity:1; transform:translateX(-50%) translateY(2px)   scale(1.4); }
+        55%  { opacity:1; transform:translateX(-50%) translateY(-28px) scale(1.0); }
+        100% { opacity:0; transform:translateX(-50%) translateY(-50px) scale(0.7); }
+      }
+    `
+    document.head.appendChild(s)
+  }, [])
+
+  // Detect new flash signals each time badges array updates
+  useEffect(() => {
+    for (const b of badges) {
+      if (b.flashKey && b.flashKey !== lastFlashKey.current.get(b.id)) {
+        lastFlashKey.current.set(b.id, b.flashKey)
+        deployAnim.current.set(b.id, { startTime: performance.now(), count: b.flashCount ?? 1 })
+      }
+    }
+  }, [badges])
+
   useFrame(() => {
-    // Camera direction (unit vector pointing from globe center toward camera)
     camDir.current.copy(camera.position).normalize()
+    const now = performance.now()
 
     for (let i = 0; i < normals.length; i++) {
       const el = divRefs.current[i]
       if (!el) continue
 
-      // dot = 1  → badge faces camera directly (front center)
-      // dot = 0  → badge is on the limb (edge of globe)
-      // dot < 0  → badge is on the far side (hidden)
       const dot = normals[i].dot(camDir.current)
+      const t = Math.max(0, dot)
+      const opacity = t * t * Math.sqrt(t)  // t^2.5
 
-      // Power-curve falloff: only markers close to the camera center stay
-      // prominent; everything else quickly fades.  dot^2.5 gives a tight
-      // "spotlight" — roughly the inner 50° cone is clearly visible while
-      // outer markers fade to subtle hints and then disappear at the limb.
-      //   dot=1.0 → 1.00 (full)
-      //   dot=0.8 → 0.57
-      //   dot=0.6 → 0.28
-      //   dot=0.4 → 0.10
-      //   dot=0.2 → 0.02 (essentially invisible)
-      const t       = Math.max(0, dot)
-      const opacity = t * t * Math.sqrt(t)   // t^2.5, no Math.pow needed
-
-      // Below this threshold skip paint entirely — avoids ghost smears
       if (opacity < 0.04) {
         el.style.visibility = 'hidden'
         continue
       }
 
-      // Scale: use CSS transform (compositor-only, zero layout cost).
-      // In-focus markers are full size; out-of-focus shrink to 62%.
-      const scale = 0.62 + 0.38 * opacity
+      let scale = 0.62 + 0.38 * opacity
+
+      // Deploy bounce: subtle scale punch over 700 ms — no brightness flash,
+      // border glow is handled via CSS transition on the JSX boxShadow/highlight.
+      const anim = deployAnim.current.get(badges[i].id)
+      if (anim) {
+        const progress = Math.min(1, (now - anim.startTime) / 700)
+        const pulse = Math.sin(Math.PI * progress)
+        scale *= 1 + 0.28 * pulse
+        if (progress >= 1) deployAnim.current.delete(badges[i].id)
+      }
 
       el.style.visibility = 'visible'
-      el.style.opacity     = opacity as unknown as string
-      el.style.transform   = `scale(${scale.toFixed(3)})`
+      el.style.opacity = opacity as unknown as string
+      el.style.transform = `scale(${scale.toFixed(3)})`
     }
   })
 
@@ -774,9 +794,19 @@ function TerritoryArmyBadges({ badges, onBadgeClick }: { badges: ArmyBadgeDef[],
         return (
           <Html key={b.id} position={pos} center zIndexRange={[0, 50]}>
             <div
-              ref={el => { divRefs.current[i] = el }}
+              ref={el => {
+                divRefs.current[i] = el
+                // Set initial hidden state once via ref — never in JSX style, so
+                // React re-renders can't reset the imperatively-driven opacity/transform.
+                if (el && el.style.opacity === '') {
+                  el.style.opacity = '0'
+                  el.style.visibility = 'hidden'
+                  el.style.transform = 'scale(0.62)'
+                }
+              }}
               onClick={onBadgeClick ? () => onBadgeClick(b.id) : undefined}
               style={{
+                position: 'relative', overflow: 'visible',
                 width: '28px', height: '28px', borderRadius: '50%',
                 background: b.color,
                 border: b.highlight
@@ -790,17 +820,109 @@ function TerritoryArmyBadges({ badges, onBadgeClick }: { badges: ArmyBadgeDef[],
                   : '0 2px 6px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.25)',
                 pointerEvents: onBadgeClick ? 'auto' : 'none',
                 cursor: onBadgeClick ? 'pointer' : 'default',
-                userSelect: 'none',
-                whiteSpace: 'nowrap',
-                // Start hidden; useFrame sets correct opacity/scale on first tick
-                opacity: 0, visibility: 'hidden', transform: 'scale(0.62)',
+                userSelect: 'none', whiteSpace: 'nowrap',
+                // CSS transition lets the highlight ring fade out smoothly when
+                // the highlight prop is cleared — no useFrame involvement needed.
+                transition: 'box-shadow 0.4s ease-out, border-color 0.4s ease-out',
+                // opacity / visibility / transform driven imperatively — not here
               }}
             >
               {b.armies}
+              {/* Floating "+N" counter — remounted on each new flashKey to restart CSS anim */}
+
             </div>
           </Html>
         )
       })}
+    </>
+  )
+}
+
+// ─── Troop Movement Arc ───────────────────────────────────────────────────────
+// Modern military-map visualization: animated dashed arc with slow-moving unit
+// markers. Dashes flow continuously from attacker toward defender to convey
+// direction of movement. Markers swell into view mid-arc and fade at endpoints.
+
+function CannonArcRenderer({
+  fromLat, fromLon, toLat, toLon, markerColor = '#D4961C',
+}: {
+  fromLat: number; fromLon: number; toLat: number; toLon: number; markerColor?: string
+}) {
+  const NUM_MARKERS = 2
+  const DURATION = 4.0  // seconds — slow, deliberate movement
+
+  const { curve, lineObj, lineMat } = useMemo(() => {
+    const p0 = latLonToVec3(fromLat, fromLon, 1.008)
+    const p2 = latLonToVec3(toLat, toLon, 1.008)
+    const mid = p0.clone().add(p2).multiplyScalar(0.5)
+    const dist = p0.distanceTo(p2)
+    const ctrl = mid.clone().normalize().multiplyScalar(1.0 + 0.14 + dist * 0.35)
+    const c = new THREE.QuadraticBezierCurve3(p0, ctrl, p2)
+
+    const mat = new THREE.LineDashedMaterial({
+      color: new THREE.Color('#C8981E'),
+      dashSize: 0.030,
+      gapSize: 0.026,
+      opacity: 0.72,
+      transparent: true,
+    })
+    const geo = new THREE.BufferGeometry().setFromPoints(c.getPoints(80))
+    const obj = new THREE.Line(geo, mat)
+    obj.computeLineDistances()  // required for LineDashedMaterial to work
+
+    return { curve: c, lineObj: obj, lineMat: mat }
+  }, [fromLat, fromLon, toLat, toLon])
+
+  // Dispose geometry/material when component unmounts or arc changes
+  useEffect(() => () => {
+    lineObj.geometry.dispose()
+      ; (lineObj.material as THREE.LineDashedMaterial).dispose()
+  }, [lineObj])
+
+  const markerRefs = useRef<(THREE.Mesh | null)[]>([null, null])
+  const tRef = useRef(0)
+
+  useFrame((_, delta) => {
+    // Dashes flow toward target — negative offset = forward direction
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ; (lineMat as any).dashOffset -= delta * 0.032
+
+    tRef.current = (tRef.current + delta / DURATION) % 1
+
+    for (let i = 0; i < NUM_MARKERS; i++) {
+      const mesh = markerRefs.current[i]
+      if (!mesh) continue
+
+      const t = (tRef.current + i / NUM_MARKERS) % 1
+      mesh.position.copy(curve.getPoint(t))
+
+      // Smooth fade: full size across middle 80%, invisible at endpoints
+      const edgeFade = Math.min(t * 10, 1) * Math.min((1 - t) * 10, 1)
+        ; (mesh.material as THREE.MeshStandardMaterial).opacity = 0.25 + 0.75 * edgeFade
+      mesh.scale.setScalar(0.4 + 0.6 * edgeFade)
+    }
+  })
+
+  return (
+    <>
+      {/* Dashed arc — THREE.Line with LineDashedMaterial for animated dashOffset */}
+      <primitive object={lineObj} />
+
+      {/* Moving unit markers — swell through mid-arc, fade at endpoints */}
+      {Array.from({ length: NUM_MARKERS }, (_, i) => (
+        <mesh key={i} ref={el => { markerRefs.current[i] = el }}>
+          <sphereGeometry args={[0.010, 12, 12]} />
+          <meshStandardMaterial
+            color={markerColor}
+            emissive={markerColor}
+            emissiveIntensity={1.2}
+            roughness={0.4}
+            metalness={0.3}
+            transparent
+            opacity={1}
+          />
+        </mesh>
+      ))}
     </>
   )
 }
@@ -905,12 +1027,12 @@ function EarthMesh() {
 
 function Atmosphere() {
   const material = useMemo(() => new THREE.ShaderMaterial({
-    vertexShader:   atmosphereVertexShader,
+    vertexShader: atmosphereVertexShader,
     fragmentShader: atmosphereFragmentShader,
-    transparent:    true,
-    depthWrite:     false,
-    blending:       THREE.AdditiveBlending,
-    side:           THREE.FrontSide,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.FrontSide,
   }), [])
   return (
     <mesh scale={1.12} material={material}>
@@ -931,9 +1053,9 @@ function DarkSideGlow() {
       }
     `,
     transparent: true,
-    depthWrite:  false,
-    blending:    THREE.NormalBlending,
-    side:        THREE.BackSide,
+    depthWrite: false,
+    blending: THREE.NormalBlending,
+    side: THREE.BackSide,
   }), [])
   return (
     <mesh scale={1.005} material={material}>
@@ -962,24 +1084,24 @@ function ZoomTracker({ onZoomChange }: { onZoomChange: (distance: number) => voi
 // ─── Country Borders + Click Detection ────────────────────────────────────────
 
 interface CountryBordersProps {
-  features:         GeoJSON.Feature[]
-  featureMap:       Map<number, GeoJSON.Feature>
-  selectionMode:    'none' | 'continent' | 'multi-country'
-  selectedIds:      number[]
-  interactable:     boolean
-  onHoverChange:    (id: number | null, name: string | null, continent: ContinentId | null) => void
+  features: GeoJSON.Feature[]
+  featureMap: Map<number, GeoJSON.Feature>
+  selectionMode: 'none' | 'continent' | 'multi-country'
+  selectedIds: number[]
+  interactable: boolean
+  onHoverChange: (id: number | null, name: string | null, continent: ContinentId | null) => void
   onContinentClick: (continent: ContinentId, countryIds: number[], features: GeoJSON.Feature[]) => void
-  onCountryClick:   (id: number, name: string, feat: GeoJSON.Feature) => void
+  onCountryClick: (id: number, name: string, feat: GeoJSON.Feature) => void
 }
 
 function CountryBorders({
   features, featureMap, selectionMode, selectedIds,
   interactable, onHoverChange, onContinentClick, onCountryClick,
 }: CountryBordersProps) {
-  const meshRef        = useRef<THREE.Mesh>(null!)
+  const meshRef = useRef<THREE.Mesh>(null!)
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
-  const lastHoverRef   = useRef<number | null>(null)
-  const throttleRef    = useRef(0)
+  const lastHoverRef = useRef<number | null>(null)
+  const throttleRef = useRef(0)
 
   // Border segments with continent info, built once
   const borderSegments = useMemo(() => {
@@ -987,12 +1109,12 @@ function CountryBorders({
       const geo = feat.geometry
       if (!geo) return []
       const rings: number[][][] =
-        geo.type === 'Polygon'      ? geo.coordinates as number[][][] :
-        geo.type === 'MultiPolygon' ? (geo.coordinates as number[][][][]).flat() :
-        []
+        geo.type === 'Polygon' ? geo.coordinates as number[][][] :
+          geo.type === 'MultiPolygon' ? (geo.coordinates as number[][][][]).flat() :
+            []
       const id = typeof feat.id === 'string' ? parseInt(feat.id) : (feat.id as number ?? 0)
       return rings.map((ring) => ({
-        points:      ringToPoints(ring),
+        points: ringToPoints(ring),
         id,
         continentId: getContinent(id),
       }))
@@ -1081,8 +1203,8 @@ function CountryBorders({
       </mesh>
 
       {borderSegments.map((seg, i) => {
-        const isSelected      = selectedIds.includes(seg.id)
-        const isHoveredCont   = selectionMode === 'continent'
+        const isSelected = selectedIds.includes(seg.id)
+        const isHoveredCont = selectionMode === 'continent'
           && hovered?.continent != null
           && seg.continentId === hovered.continent
         const isHoveredCountry = hovered?.id === seg.id
@@ -1092,16 +1214,16 @@ function CountryBorders({
 
         if (isSelected) {
           color = '#D4A843'   // warm gold for selected
-          lw    = 2.2
+          lw = 2.2
         } else if (isHoveredCont) {
           color = '#F0D88A'   // bright gold for continent hover
-          lw    = 1.8
+          lw = 1.8
         } else if (isHoveredCountry) {
           color = '#E8CC70'   // gold for country hover
-          lw    = 1.6
+          lw = 1.6
         } else {
           color = '#4a6480'   // muted blue-gray baseline (shows up against dark earth)
-          lw    = 0.6
+          lw = 0.6
         }
 
         return (
@@ -1119,29 +1241,28 @@ function ContinentLabels({
   selectedContinent,
   selectionMode,
 }: {
-  hoveredContinent:  ContinentId | null
+  hoveredContinent: ContinentId | null
   selectedContinent: ContinentId | null
-  selectionMode:     'none' | 'continent' | 'multi-country'
+  selectionMode: 'none' | 'continent' | 'multi-country'
 }) {
   return (
     <>
       {(Object.entries(CONTINENT_INFO) as [ContinentId, typeof CONTINENT_INFO[ContinentId]][]).map(([id, info]) => {
-        const pos      = latLonToVec3(info.centroid[1], info.centroid[0], 1.18)
+        const pos = latLonToVec3(info.centroid[1], info.centroid[0], 1.18)
         const isActive = id === hoveredContinent || id === selectedContinent
         const isContinentMode = selectionMode === 'continent'
 
         return (
           <Html key={id} position={pos} center occlude distanceFactor={3}>
             <div
-              className={`pointer-events-none select-none transition-all duration-300 ${
-                isActive          ? 'opacity-100 scale-110' :
-                isContinentMode   ? 'opacity-55 scale-100' :
-                                    'opacity-25 scale-95'
-              }`}
+              className={`pointer-events-none select-none transition-all duration-300 ${isActive ? 'opacity-100 scale-110' :
+                isContinentMode ? 'opacity-55 scale-100' :
+                  'opacity-25 scale-95'
+                }`}
             >
               <span
                 style={{
-                  color:      isActive ? info.color : '#C9A84C',
+                  color: isActive ? info.color : '#C9A84C',
                   textShadow: '0 1px 6px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.6)',
                   letterSpacing: '0.12em',
                 }}
@@ -1160,9 +1281,9 @@ function ContinentLabels({
 // ─── City Zone Markers ────────────────────────────────────────────────────────
 
 export interface MarkerDef {
-  id:    string
-  lat:   number
-  lon:   number
+  id: string
+  lat: number
+  lon: number
   label: string
 }
 
@@ -1182,14 +1303,14 @@ function CityMarkers({ markers }: { markers: MarkerDef[] }) {
 
     positions.forEach((pos, i) => {
       dummy.position.copy(pos)
-      
+
       // Billboard: face the camera
       dummy.lookAt(camera.position)
-      
+
       // Scale based on hover
       const s = hoveredIdx === i ? 0.045 : 0.03
       dummy.scale.set(s, s, s)
-      
+
       // Check visibility (occlusion by earth)
       const dot = pos.clone().normalize().dot(camera.position.clone().normalize())
       if (dot < 0.2) { // Hidden or near the edge
@@ -1239,9 +1360,9 @@ function CityMarkers({ markers }: { markers: MarkerDef[] }) {
             <div
               className="border border-crusader-gold/30 rounded-sm backdrop-blur-sm whitespace-nowrap"
               style={{
-                background:  'rgba(5,4,2,0.85)',
-                padding:     '2px 6px',
-                boxShadow:   '0 1px 8px rgba(0,0,0,0.7)',
+                background: 'rgba(5,4,2,0.85)',
+                padding: '2px 6px',
+                boxShadow: '0 1px 8px rgba(0,0,0,0.7)',
               }}
             >
               <span
@@ -1258,28 +1379,60 @@ function CityMarkers({ markers }: { markers: MarkerDef[] }) {
   )
 }
 
-// ─── Camera Focus Controller ──────────────────────────────────────────────────
-// Imperatively positions the camera after mount so the correct region is always
-// centered — even if focusLatLon arrives after the Canvas has already mounted.
+// ─── Camera Controller ────────────────────────────────────────────────────────
+// Handles both initial camera placement and smooth animated zoom during battles.
+// When battleFocus is set (both attacker and defender selected) the camera lerps
+// to the midpoint between the two territories at a distance proportional to how
+// far apart they are.  When cleared, it lerps back to the pre-battle position.
+//
+// OrbitControls does NOT need to be disabled: its update() reads camera.position
+// each frame and carries it forward as spherical coords, so the lerp simply wins
+// when there is no competing user input.
 
-function CameraFocus({ focusLatLon, cameraDistance }: {
-  focusLatLon?:   [number, number]
+function CameraFocus({ focusLatLon, cameraDistance, battleFocus }: {
+  focusLatLon?: [number, number]
   cameraDistance: number
+  battleFocus?: { lat: number; lon: number; dist: number } | null
 }) {
   const { camera } = useThree()
-  const appliedRef = useRef(false)
+  const initDone = useRef(false)
+  const animTarget = useRef<THREE.Vector3 | null>(null)
+  const preBattlePos = useRef<THREE.Vector3 | null>(null)
 
+  // One-time initial camera placement
   useEffect(() => {
-    if (appliedRef.current) return
-    appliedRef.current = true
+    if (initDone.current) return
+    initDone.current = true
     const pos = focusLatLon
       ? latLonToVec3(focusLatLon[0], focusLatLon[1], cameraDistance)
       : new THREE.Vector3(0, 0, cameraDistance)
     camera.position.copy(pos)
     camera.lookAt(0, 0, 0)
     camera.updateProjectionMatrix()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Zoom to battle midpoint when attack pair is selected; return when cleared
+  useEffect(() => {
+    if (battleFocus) {
+      preBattlePos.current = camera.position.clone()
+      animTarget.current = latLonToVec3(battleFocus.lat, battleFocus.lon, battleFocus.dist)
+    } else {
+      animTarget.current = preBattlePos.current?.clone() ?? null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [battleFocus])
+
+  useFrame((_, delta) => {
+    const target = animTarget.current
+    if (!target) return
+    camera.position.lerp(target, Math.min(1, delta * 2.5))
+    camera.lookAt(0, 0, 0)
+    if (camera.position.distanceTo(target) < 0.005) {
+      camera.position.copy(target)
+      animTarget.current = null
+    }
+  })
 
   return null
 }
@@ -1287,60 +1440,63 @@ function CameraFocus({ focusLatLon, cameraDistance }: {
 // ─── Public Interface ─────────────────────────────────────────────────────────
 
 export interface EarthGlobeProps {
-  interactive?:          boolean
-  autoRotate?:           boolean
-  selectionMode?:        'none' | 'continent' | 'multi-country'
-  selectedIds?:          number[]
-  onContinentSelect?:    (continent: ContinentId, countryIds: number[], features: GeoJSON.Feature[]) => void
+  interactive?: boolean
+  autoRotate?: boolean
+  selectionMode?: 'none' | 'continent' | 'multi-country'
+  selectedIds?: number[]
+  onContinentSelect?: (continent: ContinentId, countryIds: number[], features: GeoJSON.Feature[]) => void
   onMultiCountryToggle?: (id: number, name: string, feature: GeoJSON.Feature) => void
-  onCountrySelect?:      (id: number, name: string, feature: GeoJSON.Feature) => void
-  onZoomChange?:         (distance: number) => void
-  markers?:              MarkerDef[]
+  onCountrySelect?: (id: number, name: string, feature: GeoJSON.Feature) => void
+  onZoomChange?: (distance: number) => void
+  markers?: MarkerDef[]
   /** When provided, renders coloured Voronoi zone meshes on the globe surface */
-  territories?:          Territory[]
+  territories?: Territory[]
   /** GeoJSON features of the selected countries — used to clip zone rendering */
-  countryFeatures?:      GeoJSON.Feature[]
-  focusLatLon?:          [number, number]
+  countryFeatures?: GeoJSON.Feature[]
+  focusLatLon?: [number, number]
   /** Camera distance from globe center — smaller = more zoomed in (default 2.8) */
-  cameraDistance?:       number
+  cameraDistance?: number
   /** Show the star field background (default true) */
-  showStars?:            boolean
+  showStars?: boolean
   /** Show continent name labels (default true) */
-  showContinentLabels?:  boolean
-  className?:            string
+  showContinentLabels?: boolean
+  className?: string
   /** Override territory fill colors (territory id → CSS color) — used by game view */
-  ownerColors?:          Record<string, string>
+  ownerColors?: Record<string, string>
   /** Army count badges to render on the globe surface */
-  armyBadges?:           ArmyBadgeDef[]
+  armyBadges?: ArmyBadgeDef[]
   /** Click handler for territory-level interaction */
-  onTerritoryClick?:     (id: string) => void
+  onTerritoryClick?: (id: string) => void
+  /** When set, renders animated troop-movement arc between the two points */
+  cannonArc?: { fromLat: number; fromLon: number; toLat: number; toLon: number; markerColor?: string } | null
 }
 
 export default function EarthGlobe({
-  interactive    = true,
-  autoRotate     = false,
-  selectionMode  = 'none',
-  selectedIds    = [],
+  interactive = true,
+  autoRotate = false,
+  selectionMode = 'none',
+  selectedIds = [],
   onContinentSelect,
   onMultiCountryToggle,
   onCountrySelect,
   onZoomChange,
-  markers        = [],
-  territories    = [],
+  markers = [],
+  territories = [],
   countryFeatures = [],
   focusLatLon,
-  cameraDistance  = 2.8,
-  showStars       = true,
+  cameraDistance = 2.8,
+  showStars = true,
   showContinentLabels = true,
-  className      = 'w-full h-full',
+  className = 'w-full h-full',
   ownerColors,
   armyBadges,
   onTerritoryClick,
+  cannonArc,
 }: EarthGlobeProps) {
-  const [worldData, setWorldData]       = useState<Topology | null>(null)
-  const [globeReady, setGlobeReady]     = useState(false)
-  const [hovered, setHovered]           = useState<{ id: number; name: string; continent: ContinentId | null } | null>(null)
-  const [hoveredContinent, setHovCont]  = useState<ContinentId | null>(null)
+  const [worldData, setWorldData] = useState<Topology | null>(null)
+  const [globeReady, setGlobeReady] = useState(false)
+  const [hovered, setHovered] = useState<{ id: number; name: string; continent: ContinentId | null } | null>(null)
+  const [hoveredContinent, setHovCont] = useState<ContinentId | null>(null)
   const [selectedContinent, setSelCont] = useState<ContinentId | null>(null)
 
   const [hiresData, setHiresData] = useState<Topology | null>(null)
@@ -1398,6 +1554,21 @@ export default function EarthGlobe({
     return latLonToVec3(focusLatLon[0], focusLatLon[1], cameraDistance).toArray() as [number, number, number]
   }, [focusLatLon, cameraDistance])
 
+  // Derive battle-zoom target from the cannon arc endpoints (set when both
+  // attacker and defender are selected).  Zoom distance scales with chord length
+  // so nearby battles zoom in tightly while cross-map battles stay wider.
+  const battleFocus = useMemo(() => {
+    if (!cannonArc) return null
+    const p0 = latLonToVec3(cannonArc.fromLat, cannonArc.fromLon, 1)
+    const p2 = latLonToVec3(cannonArc.toLat, cannonArc.toLon, 1)
+    const mid = p0.clone().add(p2).normalize()
+    const [midLat, midLon] = vec3ToLatLon(mid)
+    const chord = p0.distanceTo(p2)
+    // Close battles: ~1.45 dist.  Wide battles: cap at 2.1 (just inside default).
+    const dist = Math.max(1.45, Math.min(2.1, 1.4 + chord * 0.75))
+    return { lat: midLat, lon: midLon, dist }
+  }, [cannonArc])
+
   return (
     <div className={`relative ${className}`}>
       {/* Fade-in overlay: hides the canvas until the earth texture & borders are
@@ -1412,13 +1583,13 @@ export default function EarthGlobe({
         gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
         style={{ background: 'transparent' }}
       >
-        {/* Ensure camera is properly focused on the target region after mount */}
-        <CameraFocus focusLatLon={focusLatLon} cameraDistance={cameraDistance} />
+        {/* Camera placement — initial focus + smooth battle-zoom animation */}
+        <CameraFocus focusLatLon={focusLatLon} cameraDistance={cameraDistance} battleFocus={battleFocus} />
 
         {/* Sun-like key light from upper-right */}
-        <directionalLight position={[4, 2, 4]}   intensity={3.2}  color="#fff5e0" />
+        <directionalLight position={[4, 2, 4]} intensity={3.2} color="#fff5e0" />
         {/* Cool fill light from the dark side */}
-        <directionalLight position={[-3, -1, -4]} intensity={0.5}  color="#1a3a6e" />
+        <directionalLight position={[-3, -1, -4]} intensity={0.5} color="#1a3a6e" />
         {/* Very subtle ambient to lift the darkest shadows slightly */}
         <ambientLight intensity={0.08} />
 
@@ -1482,6 +1653,15 @@ export default function EarthGlobe({
         {/* Territory-level click interaction */}
         {onTerritoryClick && territories.length > 0 && (
           <TerritoryInteraction territories={territories} onTerritoryClick={onTerritoryClick} />
+        )}
+
+        {/* Cannon arc — rendered during attack phase when both sides are selected */}
+        {cannonArc && (
+          <CannonArcRenderer
+            fromLat={cannonArc.fromLat} fromLon={cannonArc.fromLon}
+            toLat={cannonArc.toLat} toLon={cannonArc.toLon}
+            markerColor={cannonArc.markerColor}
+          />
         )}
 
         {markers.length > 0 && <CityMarkers markers={markers} />}
