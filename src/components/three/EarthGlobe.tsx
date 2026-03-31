@@ -709,7 +709,7 @@ export interface ArmyBadgeDef {
   highlight?: string  // CSS color for glow ring, undefined = none
 }
 
-function TerritoryArmyBadges({ badges }: { badges: ArmyBadgeDef[] }) {
+function TerritoryArmyBadges({ badges, onBadgeClick }: { badges: ArmyBadgeDef[], onBadgeClick?: (id: string) => void }) {
   const { camera } = useThree()
 
   // One normalized surface-normal per badge, recomputed only when badges change.
@@ -775,6 +775,7 @@ function TerritoryArmyBadges({ badges }: { badges: ArmyBadgeDef[] }) {
           <Html key={b.id} position={pos} center zIndexRange={[0, 50]}>
             <div
               ref={el => { divRefs.current[i] = el }}
+              onClick={onBadgeClick ? () => onBadgeClick(b.id) : undefined}
               style={{
                 width: '28px', height: '28px', borderRadius: '50%',
                 background: b.color,
@@ -787,7 +788,9 @@ function TerritoryArmyBadges({ badges }: { badges: ArmyBadgeDef[] }) {
                 boxShadow: b.highlight
                   ? `0 0 10px 4px ${b.highlight}, 0 2px 6px rgba(0,0,0,0.8)`
                   : '0 2px 6px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.25)',
-                pointerEvents: 'none', userSelect: 'none',
+                pointerEvents: onBadgeClick ? 'auto' : 'none',
+                cursor: onBadgeClick ? 'pointer' : 'default',
+                userSelect: 'none',
                 whiteSpace: 'nowrap',
                 // Start hidden; useFrame sets correct opacity/scale on first tick
                 opacity: 0, visibility: 'hidden', transform: 'scale(0.62)',
@@ -1473,7 +1476,7 @@ export default function EarthGlobe({
 
         {/* Army badges — HTML elements pinned to territory seed lat/lon */}
         {armyBadges && armyBadges.length > 0 && (
-          <TerritoryArmyBadges badges={armyBadges} />
+          <TerritoryArmyBadges badges={armyBadges} onBadgeClick={onTerritoryClick} />
         )}
 
         {/* Territory-level click interaction */}

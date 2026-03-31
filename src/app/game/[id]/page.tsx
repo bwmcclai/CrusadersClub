@@ -224,6 +224,7 @@ export default function GamePage() {
   const [showCards, setShowCards] = useState(false)
   const [tradeCount, setTradeCount] = useState(0)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [deployPopup, setDeployPopup] = useState<{ tid: string; count: number } | null>(null)
   const botRunning = useRef(false)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -410,7 +411,7 @@ export default function GamePage() {
 
     if (phase === 'deploy') {
       if (!isMine || deployLeft <= 0) return
-      doDeploy(tid)
+      setDeployPopup({ tid, count: 1 })
     } else if (phase === 'attack') {
       if (!attackFrom) {
         // Select source: must own and have 2+ armies
@@ -445,22 +446,22 @@ export default function GamePage() {
   }, [isMyTurn, actionLock, myGP, phase, deployLeft, attackFrom, attackTo, fortifyFrom, fortifyTo, tsMap, mapTerritories]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Deploy action ───────────────────────────────────────────────────────────
-  async function doDeploy(tid: string) {
+  async function doDeploy(tid: string, count: number) {
     setActionLock(true)
     setActionError(null)
     try {
       const ts = tsMap.get(tid)!
       const { error: uErr } = await sb.from('territory_states')
-        .update({ armies: ts.armies + 1 })
+        .update({ armies: ts.armies + count })
         .eq('game_id', gameId).eq('territory_id', tid)
       if (uErr) throw uErr
-      setTsList(prev => prev.map(t => t.territoryId === tid ? { ...t, armies: t.armies + 1 } : t))
-      const newLeft = deployLeft - 1
+      setTsList(prev => prev.map(t => t.territoryId === tid ? { ...t, armies: t.armies + count } : t))
+      const newLeft = deployLeft - count
       setDeployLeft(newLeft)
 
       await sb.from('game_events').insert({
         game_id: gameId, game_player_id: myGP!.id, event_type: 'deploy', turn_number: game!.turnNumber,
-        event_data: { territory_id: tid, armies_placed: 1 },
+        event_data: { territory_id: tid, armies_placed: count },
       })
 
       if (newLeft <= 0) setPhase('attack')
@@ -468,6 +469,30 @@ export default function GamePage() {
       setActionError(err?.message ?? 'Deploy failed')
     } finally { setActionLock(false) }
   }
+
+  // ── Deploy popup keyboard handler ───────────────────────────────────────────
+  useEffect(() => {
+    if (!deployPopup) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setDeployPopup(null); return }
+      if (e.key === 'Enter') {
+        const { tid, count } = deployPopup
+        setDeployPopup(null)
+        doDeploy(tid, count)
+        return
+      }
+      if (e.key === 'ArrowUp' || e.key === '+') {
+        e.preventDefault()
+        setDeployPopup(p => p && p.count < deployLeft ? { ...p, count: p.count + 1 } : p)
+      }
+      if (e.key === 'ArrowDown' || e.key === '-') {
+        e.preventDefault()
+        setDeployPopup(p => p && p.count > 1 ? { ...p, count: p.count - 1 } : p)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [deployPopup, deployLeft]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Attack action ───────────────────────────────────────────────────────────
   async function doAttack() {
@@ -1131,6 +1156,55 @@ export default function GamePage() {
             isMyTurn={isMyTurn}
             onClick={handleTerritoryClick}
           />
+
+          {/* ── Deploy popup ─────────────────────────────────────────────────── */}
+          {deployPopup && phase === 'deploy' && (() => {
+            const territory = mapTerritories.find(t => t.id === deployPopup.tid)
+            const safeCount = Math.min(deployPopup.count, deployLeft)
+            return (
+              <div className="absolute inset-0 flex items-end justify-center pb-10 pointer-events-none z-50">
+                <div
+                  className="pointer-events-auto rounded-2xl border border-crusader-gold/40 px-6 pt-5 pb-4 shadow-[0_0_60px_rgba(0,0,0,0.9),0_0_40px_rgba(245,200,66,0.06)] min-w-[230px]"
+                  style={{ background: 'rgba(10,7,3,0.97)', backdropFilter: 'blur(16px)' }}
+                >
+                  <p className="font-cinzel text-[8px] tracking-[0.4em] text-crusader-gold/40 text-center mb-0.5">DEPLOY TO</p>
+                  <p className="font-cinzel text-[13px] text-crusader-gold font-bold text-center mb-4 tracking-widest truncate">{territory?.name ?? 'Territory'}</p>
+
+                  <div className="flex items-center justify-center gap-4 mb-4">
+                    <button
+                      onClick={() => setDeployPopup(p => p && p.count > 1 ? { ...p, count: p.count - 1 } : p)}
+                      disabled={safeCount <= 1}
+                      className="w-10 h-10 rounded-xl border border-crusader-gold/30 hover:border-crusader-gold/60 hover:bg-crusader-gold/10 flex items-center justify-center text-crusader-gold text-2xl font-bold transition-all disabled:opacity-25 disabled:cursor-not-allowed select-none"
+                    >−</button>
+                    <div className="w-16 text-center">
+                      <span
+                        className="font-cinzel text-5xl font-bold leading-none tabular-nums"
+                        style={{ color: '#F5C842', textShadow: '0 0 24px rgba(245,200,66,0.55)' }}
+                      >{safeCount}</span>
+                    </div>
+                    <button
+                      onClick={() => setDeployPopup(p => p && p.count < deployLeft ? { ...p, count: p.count + 1 } : p)}
+                      disabled={safeCount >= deployLeft}
+                      className="w-10 h-10 rounded-xl border border-crusader-gold/30 hover:border-crusader-gold/60 hover:bg-crusader-gold/10 flex items-center justify-center text-crusader-gold text-2xl font-bold transition-all disabled:opacity-25 disabled:cursor-not-allowed select-none"
+                    >+</button>
+                  </div>
+
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      onClick={() => setDeployPopup(null)}
+                      className="flex-1 py-2 rounded-xl border border-white/15 text-white/35 font-cinzel text-[10px] tracking-widest hover:border-white/30 hover:text-white/55 transition-all"
+                    >CANCEL</button>
+                    <button
+                      onClick={() => { setDeployPopup(null); doDeploy(deployPopup.tid, safeCount) }}
+                      disabled={actionLock}
+                      className="flex-[2] py-2 px-4 rounded-xl border border-crusader-gold/50 bg-crusader-gold/15 text-crusader-gold font-cinzel text-[11px] tracking-widest font-bold hover:bg-crusader-gold/25 hover:border-crusader-gold/70 transition-all disabled:opacity-50"
+                    >DEPLOY</button>
+                  </div>
+                  <p className="text-center text-[8px] font-cinzel text-white/20 tracking-wider">↑↓ · ENTER · ESC</p>
+                </div>
+              </div>
+            )
+          })()}
         </div>
 
         {/* ── Right Sidebar ──────────────────────────────────────────────────── */}
@@ -1166,7 +1240,7 @@ export default function GamePage() {
                     >
                       {deployLeft}
                     </p>
-                    <p className="font-cinzel text-[9px] tracking-[0.25em] text-crusader-gold/35 mt-2">CLICK YOUR TERRITORIES</p>
+                    <p className="font-cinzel text-[9px] tracking-[0.25em] text-crusader-gold/35 mt-2">CLICK A TERRITORY TO DEPLOY</p>
                   </div>
 
                   {myCards.length > 0 && (
