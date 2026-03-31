@@ -212,7 +212,7 @@ function ZoneOverlays({
   const texture = useMemo(() => {
     if (territories.length === 0) return null
 
-    const W = 4096, H = 2048
+    const W = 8192, H = 4096
     const canvas = document.createElement('canvas')
     canvas.width  = W
     canvas.height = H
@@ -230,6 +230,10 @@ function ZoneOverlays({
     const SX = W / 1200, SY = H / 600
     const equiToCanvas = (polygon: [number, number][]): [number, number][] =>
       polygon.map(([ex, ey]) => [ex * SX, ey * SY] as [number, number])
+
+    // ── Dark veil — dims non-playable globe; territory fills rendered below overwrite it ──
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.60)'
+    ctx.fillRect(0, 0, W, H)
 
     // ── Canvas path helpers ───────────────────────────────────────────────────
 
@@ -376,7 +380,7 @@ function ZoneOverlays({
           const gi = subdivZoneMap.get(String(sub.id)) ?? entries[0].gi
           const t = giToTerritory.get(gi)
           traceGeo(sub.geometry)
-          ctx.fillStyle = (t ? (ownerColors[t.id] ?? ZONE_PALETTE[gi % ZONE_PALETTE.length]) : ZONE_PALETTE[gi % ZONE_PALETTE.length]) + 'CC'
+          ctx.fillStyle = (t ? (ownerColors[t.id] ?? ZONE_PALETTE[gi % ZONE_PALETTE.length]) : ZONE_PALETTE[gi % ZONE_PALETTE.length]) + 'EE'
           ctx.fill('evenodd')
         }
 
@@ -420,8 +424,8 @@ function ZoneOverlays({
         ctx.lineJoin    = 'round'
         ctx.lineCap     = 'round'
         traceZoneBorders()
-        ctx.strokeStyle = 'rgba(255, 228, 130, 0.35)'
-        ctx.lineWidth   = 14
+        ctx.strokeStyle = 'rgba(255, 228, 130, 0.50)'
+        ctx.lineWidth   = 22
         ctx.stroke()
         ctx.restore()
 
@@ -429,8 +433,8 @@ function ZoneOverlays({
         ctx.lineJoin    = 'round'
         ctx.lineCap     = 'round'
         traceZoneBorders()
-        ctx.strokeStyle = 'rgba(215, 175, 60, 0.92)'
-        ctx.lineWidth   = 3
+        ctx.strokeStyle = 'rgba(215, 175, 60, 0.97)'
+        ctx.lineWidth   = 5
         ctx.stroke()
 
         // ── Orphan patch: sub-Voronoi fill for zones that won no subdivision ─
@@ -486,7 +490,7 @@ function ZoneOverlays({
                 if (pts) {
                   tracePts(pts)
                   const t = winnerEntry.territory
-                  ctx.fillStyle = (ownerColors[t.id] ?? ZONE_PALETTE[winnerEntry.gi % ZONE_PALETTE.length]) + 'CC'
+                  ctx.fillStyle = (ownerColors[t.id] ?? ZONE_PALETTE[winnerEntry.gi % ZONE_PALETTE.length]) + 'EE'
                   ctx.fill()
                 }
               }
@@ -497,7 +501,7 @@ function ZoneOverlays({
                 if (!pts) continue
                 tracePts(pts)
                 const t = orphan.territory
-                ctx.fillStyle = (ownerColors[t.id] ?? ZONE_PALETTE[orphan.gi % ZONE_PALETTE.length]) + 'CC'
+                ctx.fillStyle = (ownerColors[t.id] ?? ZONE_PALETTE[orphan.gi % ZONE_PALETTE.length]) + 'EE'
                 ctx.fill()
                 // Use seed as label anchor (subdivision centroid belongs to winner)
                 zoneLabelPos.set(orphan.gi, [orphan.territory.seed[0] * SX, orphan.territory.seed[1] * SY])
@@ -512,8 +516,8 @@ function ZoneOverlays({
                 const pts = rawMap.get(territory.id)
                 if (!pts) return
                 tracePts(chaikinSmooth(pts, 4))
-                ctx.strokeStyle = 'rgba(255, 228, 130, 0.35)'
-                ctx.lineWidth   = 14
+                ctx.strokeStyle = 'rgba(255, 228, 130, 0.50)'
+                ctx.lineWidth   = 22
                 ctx.stroke()
               })
               ctx.restore()
@@ -522,8 +526,8 @@ function ZoneOverlays({
                 const pts = rawMap.get(territory.id)
                 if (!pts) return
                 tracePts(chaikinSmooth(pts, 4))
-                ctx.strokeStyle = 'rgba(215, 175, 60, 0.92)'
-                ctx.lineWidth   = 3
+                ctx.strokeStyle = 'rgba(215, 175, 60, 0.97)'
+                ctx.lineWidth   = 5
                 ctx.stroke()
               })
 
@@ -538,7 +542,7 @@ function ZoneOverlays({
                 const pts = rawMap.get(territory.id)
                 if (!pts) return
                 tracePts(pts)
-                ctx.fillStyle = (ownerColors[territory.id] ?? ZONE_PALETTE[gi % ZONE_PALETTE.length]) + 'CC'
+                ctx.fillStyle = (ownerColors[territory.id] ?? ZONE_PALETTE[gi % ZONE_PALETTE.length]) + 'EE'
                 ctx.fill()
                 zoneLabelPos.set(gi, [territory.seed[0] * SX, territory.seed[1] * SY])
               })
@@ -549,8 +553,8 @@ function ZoneOverlays({
                 const pts = rawMap.get(territory.id)
                 if (!pts) return
                 tracePts(chaikinSmooth(pts, 4))
-                ctx.strokeStyle = 'rgba(255, 228, 130, 0.28)'
-                ctx.lineWidth   = 14
+                ctx.strokeStyle = 'rgba(255, 228, 130, 0.50)'
+                ctx.lineWidth   = 22
                 ctx.stroke()
               })
               ctx.restore()
@@ -558,8 +562,8 @@ function ZoneOverlays({
                 const pts = rawMap.get(territory.id)
                 if (!pts) return
                 tracePts(chaikinSmooth(pts, 4))
-                ctx.strokeStyle = 'rgba(215, 175, 60, 0.90)'
-                ctx.lineWidth   = 3.5
+                ctx.strokeStyle = 'rgba(215, 175, 60, 0.97)'
+                ctx.lineWidth   = 5
                 ctx.lineJoin    = 'round'
                 ctx.stroke()
               })
@@ -581,7 +585,7 @@ function ZoneOverlays({
           const pts = rawMap.get(territory.id)
           if (!pts) return
           tracePts(pts)
-          ctx.fillStyle = (ownerColors[territory.id] ?? ZONE_PALETTE[gi % ZONE_PALETTE.length]) + 'CC'
+          ctx.fillStyle = (ownerColors[territory.id] ?? ZONE_PALETTE[gi % ZONE_PALETTE.length]) + 'EE'
           ctx.fill()
         })
 
@@ -593,8 +597,8 @@ function ZoneOverlays({
           const pts = rawMap.get(territory.id)
           if (!pts) return
           tracePts(chaikinSmooth(pts, 4))
-          ctx.strokeStyle = 'rgba(255, 228, 130, 0.28)'
-          ctx.lineWidth   = 14
+          ctx.strokeStyle = 'rgba(255, 228, 130, 0.50)'
+          ctx.lineWidth   = 22
           ctx.stroke()
         })
         ctx.restore()
@@ -604,8 +608,8 @@ function ZoneOverlays({
           const pts = rawMap.get(territory.id)
           if (!pts) return
           tracePts(chaikinSmooth(pts, 4))
-          ctx.strokeStyle = 'rgba(215, 175, 60, 0.90)'
-          ctx.lineWidth   = 3.5
+          ctx.strokeStyle = 'rgba(215, 175, 60, 0.97)'
+          ctx.lineWidth   = 5
           ctx.lineJoin    = 'round'
           ctx.stroke()
         })
@@ -706,25 +710,89 @@ export interface ArmyBadgeDef {
 }
 
 function TerritoryArmyBadges({ badges }: { badges: ArmyBadgeDef[] }) {
+  const { camera } = useThree()
+
+  // One normalized surface-normal per badge, recomputed only when badges change.
+  // These are unit vectors pointing outward from the globe at each badge location.
+  const normals = useMemo(
+    () => badges.map(b => latLonToVec3(b.lat, b.lon, 1).normalize()),
+    [badges],
+  )
+
+  // Direct refs to each badge's DOM element — updated imperatively each frame
+  // so React never re-renders just to change opacity.
+  const divRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  // Reusable vector to avoid per-frame allocations
+  const camDir = useRef(new THREE.Vector3())
+
+  useFrame(() => {
+    // Camera direction (unit vector pointing from globe center toward camera)
+    camDir.current.copy(camera.position).normalize()
+
+    for (let i = 0; i < normals.length; i++) {
+      const el = divRefs.current[i]
+      if (!el) continue
+
+      // dot = 1  → badge faces camera directly (front center)
+      // dot = 0  → badge is on the limb (edge of globe)
+      // dot < 0  → badge is on the far side (hidden)
+      const dot = normals[i].dot(camDir.current)
+
+      // Power-curve falloff: only markers close to the camera center stay
+      // prominent; everything else quickly fades.  dot^2.5 gives a tight
+      // "spotlight" — roughly the inner 50° cone is clearly visible while
+      // outer markers fade to subtle hints and then disappear at the limb.
+      //   dot=1.0 → 1.00 (full)
+      //   dot=0.8 → 0.57
+      //   dot=0.6 → 0.28
+      //   dot=0.4 → 0.10
+      //   dot=0.2 → 0.02 (essentially invisible)
+      const t       = Math.max(0, dot)
+      const opacity = t * t * Math.sqrt(t)   // t^2.5, no Math.pow needed
+
+      // Below this threshold skip paint entirely — avoids ghost smears
+      if (opacity < 0.04) {
+        el.style.visibility = 'hidden'
+        continue
+      }
+
+      // Scale: use CSS transform (compositor-only, zero layout cost).
+      // In-focus markers are full size; out-of-focus shrink to 62%.
+      const scale = 0.62 + 0.38 * opacity
+
+      el.style.visibility = 'visible'
+      el.style.opacity     = opacity as unknown as string
+      el.style.transform   = `scale(${scale.toFixed(3)})`
+    }
+  })
+
   return (
     <>
-      {badges.map((b) => {
+      {badges.map((b, i) => {
         const pos = latLonToVec3(b.lat, b.lon, 1.012)
         return (
           <Html key={b.id} position={pos} center zIndexRange={[0, 50]}>
-            <div style={{
-              width: '18px', height: '18px', borderRadius: '50%',
-              background: 'rgba(0,0,0,0.88)',
-              border: `1.5px solid ${b.color}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontFamily: 'Cinzel, serif', fontSize: '7px', fontWeight: 'bold',
-              boxShadow: b.highlight
-                ? `0 0 5px 2px ${b.highlight}`
-                : '0 1px 3px rgba(0,0,0,0.7)',
-              outline: b.highlight ? `1.5px solid ${b.highlight}` : 'none',
-              pointerEvents: 'none', userSelect: 'none',
-              whiteSpace: 'nowrap',
-            }}>
+            <div
+              ref={el => { divRefs.current[i] = el }}
+              style={{
+                width: '28px', height: '28px', borderRadius: '50%',
+                background: b.color,
+                border: b.highlight
+                  ? `2.5px solid ${b.highlight}`
+                  : '2px solid rgba(0,0,0,0.65)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontFamily: 'Cinzel, serif', fontSize: '11px', fontWeight: 'bold',
+                textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 4px rgba(0,0,0,0.7)',
+                boxShadow: b.highlight
+                  ? `0 0 10px 4px ${b.highlight}, 0 2px 6px rgba(0,0,0,0.8)`
+                  : '0 2px 6px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.25)',
+                pointerEvents: 'none', userSelect: 'none',
+                whiteSpace: 'nowrap',
+                // Start hidden; useFrame sets correct opacity/scale on first tick
+                opacity: 0, visibility: 'hidden', transform: 'scale(0.62)',
+              }}
+            >
               {b.armies}
             </div>
           </Html>
@@ -1391,6 +1459,7 @@ export default function EarthGlobe({
           dampingFactor={0.06}
           enableDamping
           zoomSpeed={0.7}
+          rotateSpeed={0.35}
         />
 
         {onZoomChange && <ZoomTracker onZoomChange={onZoomChange} />}

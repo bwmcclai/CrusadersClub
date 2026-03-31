@@ -7,12 +7,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import { cn, cameraDistanceFromBounds, boundsToFocusLatLon } from '@/lib/utils'
-import ZoneCartogram from '@/components/map/ZoneCartogram'
 import Button from '@/components/ui/Button'
+import MapThumbnail from '@/components/ui/MapThumbnail'
 import { Map, Plus, Globe, Sword, Star, Layers, X, Search, ExternalLink } from 'lucide-react'
 import type { Territory, BonusGroup } from '@/types'
 
-// Dynamic import — Three.js must not run on server
+// Dynamic import — Three.js must not run on server (modal detail view only)
 const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), {
   ssr: false,
   loading: () => (
@@ -52,13 +52,6 @@ function MapCard({ map, index, onClick }: { map: MapRecord; index: number; onCli
     ? (playersData[0]?.username ?? 'Unknown')
     : ((playersData as any)?.username ?? 'Unknown')
 
-  const selectedIds  = map.country_iso_ids ?? []
-  const focusLatLon: [number, number] | undefined = map.region_bounds
-    ? boundsToFocusLatLon(map.region_bounds)
-    : undefined
-
-  const camDist = map.region_bounds ? cameraDistanceFromBounds(map.region_bounds) : 2.0
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -70,18 +63,12 @@ function MapCard({ map, index, onClick }: { map: MapRecord; index: number; onCli
       {/* Gold top line */}
       <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-crusader-gold/30 to-transparent z-10 pointer-events-none" />
 
-      {/* ── Globe side ─────────────────────────────────────────────── */}
+      {/* ── Thumbnail side ─────────────────────────────────────────── */}
       <div className="relative w-[40%] flex-shrink-0 bg-crusader-void overflow-hidden min-h-[140px]">
-        <EarthGlobe
-          interactive={false}
-          autoRotate={false}
-          selectionMode="none"
-          selectedIds={selectedIds}
-          territories={map.territories}
-          focusLatLon={focusLatLon}
-          cameraDistance={camDist}
-          showStars={false}
-          showContinentLabels={false}
+        <MapThumbnail
+          territories={map.territories ?? []}
+          selectedIds={map.country_iso_ids ?? []}
+          regionBounds={map.region_bounds}
           className="absolute inset-0 w-full h-full"
         />
         {/* Fade into card body */}
@@ -150,18 +137,19 @@ function MapCard({ map, index, onClick }: { map: MapRecord; index: number; onCli
 // ─── Map Detail Modal ─────────────────────────────────────────────────────────
 
 function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => void; player: any }) {
-  const [showGlobe, setShowGlobe] = useState(false)
   const territoryCount = Array.isArray(map.territories) ? map.territories.length : 0
   const bonusGroups = Array.isArray(map.bonus_groups) ? map.bonus_groups : []
   const playersData = map.players
   const authorName = Array.isArray(playersData) ? (playersData[0]?.username ?? 'Unknown') : ((playersData as any)?.username ?? 'Unknown')
+  const focusLatLon = map.region_bounds ? boundsToFocusLatLon(map.region_bounds) : undefined
+  const camDist = map.region_bounds ? cameraDistanceFromBounds(map.region_bounds) : 2.0
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <motion.div
@@ -170,7 +158,7 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-5xl max-h-[90vh] bg-crusader-void border border-crusader-gold/30 rounded-sm overflow-hidden shadow-[0_20px_80px_rgba(0,0,0,0.95)]"
+        className="relative w-full max-w-[92vw] h-[88vh] bg-crusader-void border border-crusader-gold/30 rounded-sm overflow-hidden shadow-[0_20px_80px_rgba(0,0,0,0.95)] flex flex-col lg:flex-row"
       >
         {/* Gold top line */}
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-crusader-gold/80 to-transparent z-10" />
@@ -183,81 +171,28 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
           <X size={20} />
         </button>
 
-        <div className="flex flex-col lg:flex-row max-h-[90vh] overflow-hidden">
-
-          {/* Left: Preview (map or globe) */}
-          <div className="lg:flex-1 relative bg-crusader-dark/50 min-h-[280px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-crusader-gold/10 overflow-hidden">
-
-            {/* Toggle tabs */}
-            <div className="absolute top-3 left-3 z-10 flex gap-1">
-              <button
-                onClick={() => setShowGlobe(false)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-cinzel font-bold tracking-widest uppercase rounded-sm border transition-all ${!showGlobe
-                    ? 'bg-crusader-gold/20 border-crusader-gold/60 text-crusader-gold'
-                    : 'bg-black/50 border-crusader-gold/20 text-crusader-gold/40 hover:text-crusader-gold/70'
-                  }`}
-              >
-                <Map size={10} /> Map
-              </button>
-              <button
-                onClick={() => setShowGlobe(true)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-cinzel font-bold tracking-widest uppercase rounded-sm border transition-all ${showGlobe
-                    ? 'bg-crusader-gold/20 border-crusader-gold/60 text-crusader-gold'
-                    : 'bg-black/50 border-crusader-gold/20 text-crusader-gold/40 hover:text-crusader-gold/70'
-                  }`}
-              >
-                <Globe size={10} /> Globe
-              </button>
-            </div>
-
-            <AnimatePresence mode="wait">
-              {!showGlobe ? (
-                <motion.div
-                  key="map"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="w-full h-full pointer-events-none p-4 pt-12"
-                >
-                  {territoryCount > 0 ? (
-                    <ZoneCartogram territories={map.territories} className="w-full h-full" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-crusader-gold/20">
-                      <Map size={60} />
-                    </div>
-                  )}
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="globe"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="w-full h-full pt-10"
-                >
-                  <EarthGlobe
-                    selectionMode="none"
-                    selectedIds={map.country_iso_ids ?? []}
-                    territories={map.territories}
-                    focusLatLon={map.region_bounds ? boundsToFocusLatLon(map.region_bounds) : undefined}
-                    className="absolute inset-0 w-full h-full"
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Region label */}
-            <div className="absolute bottom-4 left-4 pointer-events-none">
-              <span className="text-xs font-cinzel font-bold tracking-[0.2em] uppercase text-crusader-gold/70 bg-black/70 px-3 py-1 border border-crusader-gold/20 rounded-sm">
-                {map.region_name}
-              </span>
-            </div>
+        {/* Left: Globe preview — takes most of the space */}
+        <div className="lg:flex-1 relative bg-black min-h-[45vh] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-crusader-gold/10 overflow-hidden">
+          <EarthGlobe
+            selectionMode="none"
+            selectedIds={map.country_iso_ids ?? []}
+            territories={map.territories}
+            focusLatLon={focusLatLon}
+            cameraDistance={camDist}
+            showStars
+            showContinentLabels={false}
+            className="absolute inset-0 w-full h-full"
+          />
+          {/* Region label */}
+          <div className="absolute bottom-4 left-4 pointer-events-none z-10">
+            <span className="text-xs font-cinzel font-bold tracking-[0.2em] uppercase text-crusader-gold/80 bg-black/80 px-3 py-1.5 border border-crusader-gold/25 rounded-sm">
+              {map.region_name}
+            </span>
           </div>
+        </div>
 
-          {/* Right: Details panel */}
-          <div className="lg:w-80 xl:w-96 flex flex-col overflow-y-auto p-6 gap-5">
+        {/* Right: Details panel */}
+        <div className="lg:w-80 xl:w-[360px] flex flex-col overflow-y-auto p-6 gap-5">
             <div>
               <h2 className="font-cinzel text-2xl font-black text-crusader-parchment leading-tight pr-8">{map.name}</h2>
               {map.description && (
@@ -326,7 +261,6 @@ function MapModal({ map, onClose, player }: { map: MapRecord; onClose: () => voi
               </Link>
             </div>
           </div>
-        </div>
       </motion.div>
     </motion.div>
   )

@@ -1045,6 +1045,25 @@ export const WORLD_CITIES: CityFull[] = RAW.map(([name, country, lat, lon, pop])
   name, country, lat, lon, pop,
 }))
 
+/** Returns exactly one capital city per country in isoIds.
+ *  Uses COUNTRY_CAPITALS (official capital) when available; falls back to the
+ *  most populous WORLD_CITIES entry for that country. */
+export function getCapitalsForCountries(isoIds: number[]): CityFull[] {
+  const result: CityFull[] = []
+  for (const iso of isoIds) {
+    if (COUNTRY_CAPITALS[iso]) {
+      const [name, lat, lon] = COUNTRY_CAPITALS[iso]
+      result.push({ name, country: iso, lat, lon, pop: 1 })
+    } else {
+      const largest = WORLD_CITIES
+        .filter((c) => c.country === iso)
+        .sort((a, b) => b.pop - a.pop)[0]
+      if (largest) result.push(largest)
+    }
+  }
+  return result
+}
+
 /** Filter to countries in the given ISO set, sorted by population desc.
  *  For countries with no cities in the dataset, falls back to the capital. */
 export function getCitiesForCountries(isoIds: number[]): CityFull[] {

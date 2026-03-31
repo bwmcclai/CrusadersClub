@@ -7,14 +7,16 @@ import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
 import { Sword, Map, Users, Zap, Shield, Clock, Search, Plus, Filter, Bot, Globe, PenTool } from 'lucide-react'
-import { formatMode, cameraDistanceFromBounds, boundsToFocusLatLon } from '@/lib/utils'
+import { formatMode, boundsToFocusLatLon } from '@/lib/utils'
 import { createGame } from '@/lib/gameService'
 import { motion } from 'framer-motion'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import type { Player, LobbyGame, GameMode, Territory } from '@/types'
 import dynamic from 'next/dynamic'
+import MapThumbnail from '@/components/ui/MapThumbnail'
 
+// EarthGlobe only loaded on-demand for the globe preview modal
 const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), {
   ssr: false,
   loading: () => (
@@ -39,84 +41,80 @@ function GameCard({
   onPreviewGlobe: () => void
   player: Player | null
 }) {
-  const isFull      = game.current_players >= game.max_players
-  const selectedIds = game.country_iso_ids ?? []
-  const focusLatLon: [number, number] | undefined = game.region_bounds
-    ? boundsToFocusLatLon(game.region_bounds)
-    : undefined
-
-  const camDist = game.region_bounds ? cameraDistanceFromBounds(game.region_bounds) : 2.0
+  const isFull = game.current_players >= game.max_players
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className={`relative flex flex-row overflow-hidden rounded-sm border bg-crusader-void/80 shadow-[0_4px_20px_rgba(0,0,0,0.6)] transition-all duration-300 ${
-        isFull
-          ? 'border-crusader-gold/10'
-          : 'border-crusader-gold/20 hover:border-crusader-gold/50 hover:shadow-[0_8px_40px_rgba(201,168,76,0.15)]'
-      }`}
+      transition={{ duration: 0.35 }}
+      className={`group relative flex flex-row overflow-hidden rounded-lg border transition-all duration-300 ${isFull
+        ? 'border-crusader-gold/15 bg-crusader-navy/30 shadow-[0_4px_20px_rgba(0,0,0,0.5)]'
+        : 'border-crusader-gold/35 bg-gradient-to-br from-crusader-navy/60 to-crusader-dark/80 shadow-[0_4px_24px_rgba(0,0,0,0.6)] hover:border-crusader-gold/70 hover:shadow-[0_8px_48px_rgba(201,168,76,0.25)] hover:-translate-y-0.5'
+        }`}
     >
-      {/* Gold top line */}
-      {!isFull && <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-crusader-gold/40 to-transparent z-10 pointer-events-none" />}
+      {/* Gold accent top bar */}
+      <div className={`absolute top-0 left-0 right-0 h-[2px] z-10 pointer-events-none transition-opacity duration-300 ${isFull
+        ? 'bg-gradient-to-r from-transparent via-crusader-gold/20 to-transparent'
+        : 'bg-gradient-to-r from-transparent via-crusader-gold/70 to-transparent group-hover:via-crusader-gold'
+        }`} />
 
       {/* ── Info side (Left) ────────────────────────────────────────────── */}
-      <div className="w-[60%] p-5 flex flex-col justify-between min-w-0 border-r border-crusader-gold/10">
+      <div className="w-[60%] p-5 flex flex-col justify-between min-w-0 border-r border-crusader-gold/15">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             {/* Map + AI badge */}
-            <div className="flex items-center gap-2 mb-1.5">
-              <Map size={11} className="text-crusader-gold/40 flex-shrink-0" />
-              <span className="text-[10px] font-cinzel text-crusader-gold/50 tracking-widest truncate">{game.map_name}</span>
+            <div className="flex items-center gap-2 mb-2">
+              <Map size={11} className="text-crusader-gold/60 flex-shrink-0" />
+              <span className="text-[10px] font-cinzel text-crusader-gold/70 tracking-widest truncate uppercase">{game.map_name}</span>
               {game.has_ai && (
-                <span className="text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded border border-crusader-steel/40 text-crusader-gold/60 bg-crusader-steel/20 flex-shrink-0">
+                <span className="text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded border border-crusader-steel/60 text-crusader-ice/80 bg-crusader-steel/30 flex-shrink-0">
                   <Bot size={8} className="inline mr-0.5" />AI
                 </span>
               )}
             </div>
-            <h3 className="font-cinzel text-lg font-bold text-crusader-parchment truncate leading-tight">{game.name}</h3>
-            <p className="text-xs text-crusader-gold/50 flex items-center gap-1.5 mt-1">
-              <Shield size={11} className="text-crusader-gold/30" /> Hosted by {game.creator_name || 'System'}
+            <h3 className="font-cinzel text-xl font-bold text-crusader-parchment truncate leading-tight drop-shadow-[0_0_12px_rgba(232,213,163,0.3)]">{game.name}</h3>
+            <p className="text-xs text-crusader-gold/50 flex items-center gap-1.5 mt-1.5">
+              <Shield size={11} className="text-crusader-gold/40" /> Hosted by {game.creator_name || 'System'}
             </p>
           </div>
           <div className="flex flex-col gap-1.5 items-end flex-shrink-0">
-            <span className={`text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border ${
-              game.mode === 'lightning'
-                ? 'border-crusader-gold/30 text-crusader-gold bg-crusader-gold/10'
-                : 'border-crusader-glow/30 text-crusader-glow bg-crusader-glow/10'
-            }`}>
+            <span className={`text-[9px] uppercase font-bold tracking-widest px-2 py-1 rounded border ${game.mode === 'lightning'
+              ? 'border-crusader-gold/50 text-crusader-gold bg-crusader-gold/15 shadow-[0_0_8px_rgba(201,168,76,0.2)]'
+              : 'border-crusader-steel/50 text-crusader-ice/90 bg-crusader-steel/20'
+              }`}>
               {game.mode === 'lightning' ? '⚡ Light' : game.mode === 'slow_hour' ? '⏱ 1hr' : '📅 1day'}
             </span>
             {game.status === 'active' && (
-              <span className="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-green-500/30 text-green-400 bg-green-500/10">
-                In Progress
+              <span className="text-[9px] uppercase font-bold tracking-widest px-2 py-1 rounded border border-green-400/50 text-green-300 bg-green-500/15 shadow-[0_0_8px_rgba(74,222,128,0.2)]">
+                ● In Progress
               </span>
             )}
           </div>
         </div>
 
         {/* Player slots + Join */}
-        <div className="flex items-center justify-between mt-5 pt-4 border-t border-crusader-gold/10">
+        <div className="flex items-center justify-between mt-5 pt-4 border-t border-crusader-gold/15">
           <div className="flex items-center gap-2 flex-1 mr-4">
-            <Users size={13} className="text-crusader-gold/50 flex-shrink-0" />
+            <Users size={13} className="text-crusader-gold/60 flex-shrink-0" />
             <div className="flex gap-1 flex-1 max-w-[120px]">
               {Array.from({ length: game.max_players }).map((_, i) => (
                 <div
                   key={i}
-                  className={`flex-1 h-1.5 rounded-full ${
-                    i < game.current_players ? 'bg-crusader-gold shadow-glow-gold' : 'bg-crusader-dark border border-crusader-gold/10'
-                  }`}
+                  className={`flex-1 h-2 rounded-full ${i < game.current_players
+                    ? 'bg-crusader-gold shadow-[0_0_6px_rgba(201,168,76,0.6)]'
+                    : 'bg-crusader-steel/30 border border-crusader-gold/15'
+                    }`}
                 />
               ))}
             </div>
-            <span className="text-xs font-cinzel font-bold text-crusader-gold/70 flex-shrink-0">
+            <span className="text-xs font-cinzel font-bold text-crusader-gold/80 flex-shrink-0">
               {game.current_players}/{game.max_players}
             </span>
           </div>
           {player ? (
             <Link href={`/game/${game.id}`}>
-              <Button size="sm" variant={isFull ? 'ghost' : 'gold'} disabled={isFull && game.status === 'active'} className="px-6 h-8 text-xs">
+              <Button size="sm" variant={isFull ? 'ghost' : 'gold'} disabled={isFull && game.status === 'active'} className="px-6 h-8 text-xs font-cinzel tracking-widest">
                 {game.status === 'active' ? 'Watch' : isFull ? 'Spectate' : 'Join'}
               </Button>
             </Link>
@@ -128,28 +126,22 @@ function GameCard({
         </div>
       </div>
 
-      {/* ── Globe side (Right) ─────────────────────────────────────────────── */}
+      {/* ── Thumbnail side (Right) ──────────────────────────────────────────── */}
       <div
-        className="relative w-[40%] flex-shrink-0 bg-crusader-void overflow-hidden cursor-pointer group/globe min-h-[140px]"
+        className="relative w-[40%] flex-shrink-0 bg-crusader-void overflow-hidden cursor-pointer group/globe min-h-[160px]"
         onClick={onPreviewGlobe}
       >
-        <EarthGlobe
-          interactive={false}
-          autoRotate={false}
-          selectionMode="none"
-          selectedIds={selectedIds}
+        <MapThumbnail
           territories={territories ?? []}
-          focusLatLon={focusLatLon}
-          cameraDistance={camDist}
-          showStars={false}
-          showContinentLabels={false}
+          selectedIds={game.country_iso_ids ?? []}
+          regionBounds={game.region_bounds ?? undefined}
           className="absolute inset-0 w-full h-full"
         />
-        {/* Fade into card body - Flipped to L gradient */}
-        <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-crusader-void/80 to-transparent pointer-events-none" />
-        {/* Hover hint */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/globe:opacity-100 transition-opacity bg-crusader-void/40 backdrop-blur-sm">
-          <span className="font-cinzel text-xs text-crusader-gold tracking-widest flex items-center gap-2">
+        {/* Fade into card body */}
+        <div className="absolute inset-y-0 left-0 w-20 bg-gradient-to-r from-crusader-navy/80 to-transparent pointer-events-none" />
+        {/* Hover overlay */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/globe:opacity-100 transition-opacity bg-crusader-void/50 backdrop-blur-sm">
+          <span className="font-cinzel text-xs text-crusader-gold tracking-widest flex items-center gap-2 drop-shadow-[0_0_8px_rgba(201,168,76,0.8)]">
             <Globe size={13} /> Full Globe
           </span>
         </div>
@@ -162,11 +154,11 @@ function GameCard({
 // ─── Create Game Modal ────────────────────────────────────────────────────────
 
 interface CreateGameForm {
-  name:       string
-  mode:       GameMode
+  name: string
+  mode: GameMode
   maxPlayers: number
-  mapId:      string
-  aiCount:    number
+  mapId: string
+  aiCount: number
 }
 
 interface BattleMapPreview {
@@ -198,10 +190,10 @@ function CreateGameModal({
     if (open && initialMapId) {
       setForm((f) => ({
         ...f,
-        mapId:      initialMapId ?? f.mapId,
-        mode:       initialMode ?? f.mode,
+        mapId: initialMapId ?? f.mapId,
+        mode: initialMode ?? f.mode,
         maxPlayers: initialMaxPlayers ?? f.maxPlayers,
-        aiCount:    initialAiCount ?? f.aiCount,
+        aiCount: initialAiCount ?? f.aiCount,
       }))
     }
   }, [open, initialMapId, initialMode, initialMaxPlayers, initialAiCount])
@@ -218,14 +210,14 @@ function CreateGameModal({
           .limit(8)
         if (data && data.length > 0) {
           setMaps(data.map((m: any) => ({
-            id:          m.id,
-            name:        m.name,
+            id: m.id,
+            name: m.name,
             territories: Array.isArray(m.territories) ? m.territories.length : 0,
-            rating:      0,
-            plays:       m.play_count ?? 0,
+            rating: 0,
+            plays: m.play_count ?? 0,
           })))
         }
-      } catch {/* keep mock data */}
+      } catch {/* keep mock data */ }
     }
     fetchMaps()
   }, [])
@@ -269,17 +261,16 @@ function CreateGameModal({
           <div className="grid grid-cols-3 gap-2">
             {([
               { id: 'lightning', label: '⚡ Lightning', sub: '1 min/turn' },
-              { id: 'slow_hour', label: '⏱ Slow',      sub: '1 hr/turn'  },
-              { id: 'slow_day',  label: '📅 Epic',      sub: '1 day/turn' },
+              { id: 'slow_hour', label: '⏱ Slow', sub: '1 hr/turn' },
+              { id: 'slow_day', label: '📅 Epic', sub: '1 day/turn' },
             ] as const).map(({ id, label, sub }) => (
               <button
                 key={id}
                 onClick={() => setForm((f) => ({ ...f, mode: id }))}
-                className={`p-3 rounded-xl border text-center transition-all ${
-                  form.mode === id
-                    ? 'border-crusader-gold/60 bg-crusader-gold/15 text-crusader-gold'
-                    : 'border-crusader-gold/10 text-crusader-gold/40 hover:border-crusader-gold/30'
-                }`}
+                className={`p-3 rounded-xl border text-center transition-all ${form.mode === id
+                  ? 'border-crusader-gold/60 bg-crusader-gold/15 text-crusader-gold'
+                  : 'border-crusader-gold/10 text-crusader-gold/40 hover:border-crusader-gold/30'
+                  }`}
               >
                 <div className="text-sm font-cinzel font-medium">{label}</div>
                 <div className="text-xs mt-0.5 opacity-60">{sub}</div>
@@ -305,11 +296,10 @@ function CreateGameModal({
               <button
                 key={map.id}
                 onClick={() => setForm((f) => ({ ...f, mapId: map.id }))}
-                className={`p-3 rounded-xl border text-left transition-all ${
-                  form.mapId === map.id
-                    ? 'border-crusader-gold/60 bg-crusader-gold/15'
-                    : 'border-crusader-gold/10 hover:border-crusader-gold/30'
-                }`}
+                className={`p-3 rounded-xl border text-left transition-all ${form.mapId === map.id
+                  ? 'border-crusader-gold/60 bg-crusader-gold/15'
+                  : 'border-crusader-gold/10 hover:border-crusader-gold/30'
+                  }`}
               >
                 <div className="text-sm font-medium text-crusader-gold-light/80 truncate">{map.name}</div>
                 <div className="text-xs text-crusader-gold/40 mt-0.5">{map.territories} territories</div>
@@ -375,27 +365,27 @@ function CreateGameModal({
 // ─── Map preview data ─────────────────────────────────────────────────────────
 
 interface MapCacheEntry {
-  territories:     Territory[]
+  territories: Territory[]
   country_iso_ids: number[]
 }
 
 export default function LobbyPage() {
   const player = useAppStore(s => s.player)
-  const searchParams   = useSearchParams()
-  const [search, setSearch]           = useState('')
-  const [modeFilter, setModeFilter]   = useState<GameMode | 'all'>('all')
-  const [showCreate, setShowCreate]   = useState(false)
-  const [games, setGames]             = useState<LobbyGame[]>([])
-  const [mapCache, setMapCache]       = useState<Record<string, MapCacheEntry>>({})
-  const [page, setPage]               = useState(0)
-  const [hasMore, setHasMore]         = useState(true)
-  const [loading, setLoading]         = useState(true)
+  const searchParams = useSearchParams()
+  const [search, setSearch] = useState('')
+  const [modeFilter, setModeFilter] = useState<GameMode | 'all'>('all')
+  const [showCreate, setShowCreate] = useState(false)
+  const [games, setGames] = useState<LobbyGame[]>([])
+  const [mapCache, setMapCache] = useState<Record<string, MapCacheEntry>>({})
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [featuredMaps, setFeaturedMaps] = useState<any[]>([])
 
   // Globe Preview Modal State
   const [previewGlobe, setPreviewGlobe] = useState<{
-    regionName:  string
+    regionName: string
     territories: Territory[]
     selectedIds: number[]
     focusLatLon?: [number, number]
@@ -413,7 +403,7 @@ export default function LobbyPage() {
     const entries: Record<string, MapCacheEntry> = {}
     for (const m of data as any[]) {
       entries[m.id] = {
-        territories:     Array.isArray(m.territories) ? m.territories : [],
+        territories: Array.isArray(m.territories) ? m.territories : [],
         country_iso_ids: Array.isArray(m.country_iso_ids) ? m.country_iso_ids : [],
       }
     }
@@ -426,7 +416,7 @@ export default function LobbyPage() {
 
     const supabase = getSupabaseClient()
     const from = pageNumber * PAGE_SIZE
-    const to   = from + PAGE_SIZE - 1
+    const to = from + PAGE_SIZE - 1
 
     try {
       const { data, error } = await supabase
@@ -470,11 +460,11 @@ export default function LobbyPage() {
 
       if (mapsData) {
         setFeaturedMaps(mapsData.map((m: any) => ({
-          id:          m.id,
-          name:        m.name,
+          id: m.id,
+          name: m.name,
           territories: Array.isArray(m.territories) ? m.territories.length : 0,
-          rating:      5.0,
-          plays:       m.play_count ?? 0,
+          rating: 5.0,
+          plays: m.play_count ?? 0,
         })))
       }
     }
@@ -488,10 +478,10 @@ export default function LobbyPage() {
   }
 
   // Pre-populate from Map Creator redirect (?newMapId=xxx&mode=...&maxPlayers=...&aiCount=...)
-  const newMapId      = searchParams.get('newMapId')    ?? undefined
-  const presetMode    = (searchParams.get('mode')       ?? undefined) as GameMode | undefined
-  const presetPlayers = searchParams.get('maxPlayers')  ? Number(searchParams.get('maxPlayers'))  : undefined
-  const presetAi      = searchParams.get('aiCount')     ? Number(searchParams.get('aiCount'))     : undefined
+  const newMapId = searchParams.get('newMapId') ?? undefined
+  const presetMode = (searchParams.get('mode') ?? undefined) as GameMode | undefined
+  const presetPlayers = searchParams.get('maxPlayers') ? Number(searchParams.get('maxPlayers')) : undefined
+  const presetAi = searchParams.get('aiCount') ? Number(searchParams.get('aiCount')) : undefined
 
   useEffect(() => {
     if (newMapId) setShowCreate(true)
@@ -500,9 +490,9 @@ export default function LobbyPage() {
   // Helper: open globe modal for a game
   function openGlobePreview(game: LobbyGame) {
     const cached = mapCache[game.map_id]
-    const territories  = cached?.territories     ?? []
-    const selectedIds  = cached?.country_iso_ids ?? game.country_iso_ids ?? []
-    const bounds       = game.region_bounds
+    const territories = cached?.territories ?? []
+    const selectedIds = cached?.country_iso_ids ?? game.country_iso_ids ?? []
+    const bounds = game.region_bounds
     const focusLatLon: [number, number] | undefined = bounds
       ? boundsToFocusLatLon(bounds)
       : undefined
@@ -512,33 +502,43 @@ export default function LobbyPage() {
   const filtered = games.filter((g) => {
     const creatorName = g.creator_name || 'System'
     const matchSearch = g.name.toLowerCase().includes(search.toLowerCase()) || g.map_name.toLowerCase().includes(search.toLowerCase()) || creatorName.toLowerCase().includes(search.toLowerCase())
-    const matchMode   = modeFilter === 'all' || g.mode === modeFilter
+    const matchMode = modeFilter === 'all' || g.mode === modeFilter
     return matchSearch && matchMode
   })
 
   const waiting = filtered.filter((g) => g.status === 'waiting')
-  const active  = filtered.filter((g) => g.status === 'active')
+  const active = filtered.filter((g) => g.status === 'active')
 
   return (
     <div className="min-h-screen bg-crusader-void">
+      {/* Page-level ambient glow */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-crusader-gold/5 blur-[100px] rounded-full" />
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-16">
+      <main className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-16">
         {/* ── Header ──────────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-10">
           <div>
-            <h1 className="font-cinzel text-3xl font-bold text-crusader-gold glow-gold">Game Lobby</h1>
-            <p className="text-crusader-gold/50 text-sm mt-1">
-              {waiting.length} games waiting · {active.length} games in progress
+            <h1 className="font-cinzel text-4xl font-bold text-crusader-gold drop-shadow-[0_0_30px_rgba(201,168,76,0.5)]">
+              Game Lobby
+            </h1>
+            <p className="text-crusader-gold/60 text-sm mt-1.5 font-cinzel tracking-wide">
+              <span className="text-crusader-gold font-bold">{waiting.length}</span> waiting
+              <span className="mx-2 text-crusader-gold/30">·</span>
+              <span className="text-green-400 font-bold">{active.length}</span> in progress
             </p>
           </div>
-          <Button 
-            icon={<Plus size={18} />} 
-            size="lg" 
+          <Button
+            icon={<Plus size={18} />}
+            size="lg"
+            variant="gold"
             onClick={() => setShowCreate(true)}
             disabled={!player}
             title={!player ? 'Login to create a game' : undefined}
+            className="shadow-[0_0_20px_rgba(201,168,76,0.3)] hover:shadow-[0_0_32px_rgba(201,168,76,0.5)] font-cinzel tracking-widest"
           >
-            Create Game
+            &nbsp;Create Game
           </Button>
         </div>
 
@@ -548,29 +548,29 @@ export default function LobbyPage() {
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1 relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-crusader-gold/30" />
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-crusader-gold/50" />
                 <input
                   type="text"
                   placeholder="Search games or maps..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-crusader-navy/60 border border-crusader-gold/20 text-sm text-crusader-gold-light placeholder:text-crusader-gold/30 focus:outline-none focus:border-crusader-gold/50"
+                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-crusader-navy/50 border border-crusader-gold/25 text-sm text-crusader-gold-light placeholder:text-crusader-gold/35 focus:outline-none focus:border-crusader-gold/60 focus:shadow-[0_0_12px_rgba(201,168,76,0.15)] transition-all"
                 />
               </div>
               <div className="flex gap-2">
                 {([
-                  { id: 'all',       label: 'All' },
+                  { id: 'all', label: 'All' },
                   { id: 'lightning', label: '⚡' },
                   { id: 'slow_hour', label: '⏱' },
-                  { id: 'slow_day',  label: '📅' },
+                  { id: 'slow_day', label: '📅' },
                 ] as const).map(({ id, label }) => (
                   <button
                     key={id}
                     onClick={() => setModeFilter(id)}
-                    className={`px-3 py-2 rounded-xl text-sm font-medium transition-all border
+                    className={`px-3 py-2 rounded-lg text-sm font-cinzel font-medium transition-all border
                       ${modeFilter === id
-                        ? 'bg-crusader-gold/20 text-crusader-gold border-crusader-gold/40'
-                        : 'bg-transparent text-crusader-gold/40 border-crusader-gold/10 hover:border-crusader-gold/30'
+                        ? 'bg-crusader-gold/20 text-crusader-gold border-crusader-gold/50 shadow-[0_0_10px_rgba(201,168,76,0.2)]'
+                        : 'bg-crusader-navy/30 text-crusader-gold/50 border-crusader-gold/15 hover:border-crusader-gold/40 hover:text-crusader-gold/80'
                       }`}
                   >
                     {label}
@@ -582,9 +582,13 @@ export default function LobbyPage() {
             {/* Waiting games */}
             {waiting.length > 0 && (
               <div>
-                <h2 className="font-cinzel text-sm font-semibold text-crusader-gold/60 tracking-widest uppercase mb-3">
-                  Open — Join Now
-                </h2>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-crusader-gold/30 to-transparent" />
+                  <h2 className="font-cinzel text-xs font-bold text-crusader-gold tracking-[0.2em] uppercase">
+                    Open — Join Now
+                  </h2>
+                  <div className="h-px flex-1 bg-gradient-to-l from-crusader-gold/30 to-transparent" />
+                </div>
                 <div className="flex flex-col gap-4">
                   {waiting.map((g) => (
                     <GameCard
@@ -602,9 +606,13 @@ export default function LobbyPage() {
             {/* Active games */}
             {active.length > 0 && (
               <div>
-                <h2 className="font-cinzel text-sm font-semibold text-crusader-gold/60 tracking-widest uppercase mb-3">
-                  In Progress — Spectate
-                </h2>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-px flex-1 bg-gradient-to-r from-green-500/30 to-transparent" />
+                  <h2 className="font-cinzel text-xs font-bold text-green-400 tracking-[0.2em] uppercase">
+                    In Progress — Spectate
+                  </h2>
+                  <div className="h-px flex-1 bg-gradient-to-l from-green-500/30 to-transparent" />
+                </div>
                 <div className="flex flex-col gap-4">
                   {active.map((g) => (
                     <GameCard
@@ -620,23 +628,24 @@ export default function LobbyPage() {
             )}
 
             {filtered.length === 0 ? (
-              <div className="text-center py-20">
-                <Globe size={48} className="mx-auto text-crusader-gold/20 mb-4" />
-                <p className="text-crusader-gold/40 font-cinzel">No games found</p>
-                <Button className="mt-6" onClick={() => setShowCreate(true)} icon={<Plus size={16} />}>
-                  Create the First One
+              <div className="text-center py-20 border border-dashed border-crusader-gold/15 rounded-xl bg-crusader-navy/20">
+                <Globe size={48} className="mx-auto text-crusader-gold/30 mb-4" />
+                <p className="text-crusader-gold/50 font-cinzel tracking-widest">No battles found</p>
+                <p className="text-crusader-gold/30 text-sm mt-1 mb-6">Be the first to forge a game</p>
+                <Button onClick={() => setShowCreate(true)} icon={<Plus size={16} />} variant="gold">
+                  Create the First Game
                 </Button>
               </div>
             ) : (
               hasMore && !search && (
                 <div className="pt-8 flex justify-center">
-                  <Button 
-                    variant="ghost" 
-                    onClick={handleLoadMore} 
+                  <Button
+                    variant="ghost"
+                    onClick={handleLoadMore}
                     loading={loadingMore}
-                    className="font-cinzel tracking-widest px-8"
+                    className="font-cinzel tracking-widest px-8 border border-crusader-gold/20 hover:border-crusader-gold/40"
                   >
-                    {loadingMore ? 'Forging more games…' : 'Forge More Games'}
+                    {loadingMore ? 'Forging more games…' : 'Load More Games'}
                   </Button>
                 </div>
               )
@@ -644,53 +653,65 @@ export default function LobbyPage() {
           </div>
 
           {/* ── Sidebar ────────────────────────────────────────────────────── */}
-          <div className="space-y-6">
+          <div className="space-y-5">
             {/* Quick start */}
-            <Card className="p-6">
-              <h3 className="font-cinzel text-base font-semibold text-crusader-gold mb-4">Quick Start</h3>
+            <div className="rounded-lg border border-crusader-gold/25 bg-gradient-to-b from-crusader-navy/60 to-crusader-dark/60 p-5 shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
+              <h3 className="font-cinzel text-sm font-bold text-crusader-gold tracking-[0.15em] uppercase mb-4">Quick Start</h3>
               <div className="flex flex-col gap-3">
-                <Button fullWidth variant="gold" icon={<Zap size={16} />} onClick={() => setShowCreate(true)}>
+                <Button
+                  fullWidth
+                  variant="gold"
+                  icon={<Zap size={16} />}
+                  onClick={() => setShowCreate(true)}
+                  className="shadow-[0_0_16px_rgba(201,168,76,0.25)] hover:shadow-[0_0_28px_rgba(201,168,76,0.45)] font-cinzel tracking-widest"
+                >
                   ⚡ Lightning Game
                 </Button>
-                <Button fullWidth variant="outline" icon={<Shield size={16} />} onClick={() => setShowCreate(true)}>
+                <Button
+                  fullWidth
+                  variant="outline"
+                  icon={<Shield size={16} />}
+                  onClick={() => setShowCreate(true)}
+                  className="font-cinzel tracking-widest border-crusader-steel/50 hover:border-crusader-gold/40"
+                >
                   vs AI Bot
                 </Button>
               </div>
-            </Card>
+            </div>
 
             {/* Featured Maps */}
-            <Card className="p-6">
+            <div className="rounded-lg border border-crusader-gold/20 bg-gradient-to-b from-crusader-navy/50 to-crusader-dark/60 p-5 shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-cinzel text-base font-semibold text-crusader-gold">Featured Maps</h3>
-                <Link href="/maps" className="text-xs text-crusader-gold/40 hover:text-crusader-gold">View all</Link>
+                <h3 className="font-cinzel text-sm font-bold text-crusader-gold tracking-[0.15em] uppercase">Featured Maps</h3>
+                <Link href="/maps" className="text-xs text-crusader-gold/50 hover:text-crusader-gold transition-colors font-cinzel">View all →</Link>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-1">
                 {featuredMaps.map((map) => (
-                  <div key={map.id} className="flex items-center justify-between py-2 border-b border-crusader-gold/5 last:border-0">
+                  <div key={map.id} className="flex items-center justify-between py-2.5 border-b border-crusader-gold/8 last:border-0 group/map hover:bg-crusader-gold/5 rounded px-1 transition-colors cursor-pointer">
                     <div>
-                      <p className="text-sm font-medium text-crusader-gold-light/80">{map.name}</p>
-                      <p className="text-xs text-crusader-gold/40 mt-0.5">{map.territories}t · ⭐ {map.rating}</p>
+                      <p className="text-sm font-medium text-crusader-parchment/90 group-hover/map:text-crusader-parchment transition-colors">{map.name}</p>
+                      <p className="text-xs text-crusader-gold/50 mt-0.5">{map.territories}t · ⭐ {map.rating}</p>
                     </div>
-                    <span className="text-xs text-crusader-gold/30">{map.plays} plays</span>
+                    <span className="text-xs text-crusader-gold/40 font-cinzel">{map.plays} plays</span>
                   </div>
                 ))}
               </div>
-            </Card>
+            </div>
 
             {/* Create map CTA */}
-            <Card className="p-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-crusader-gold/5 rounded-bl-full" />
-              <Map size={24} className="text-crusader-gold mb-3" />
-              <h3 className="font-cinzel text-base font-semibold text-crusader-gold mb-2">Create Your Map</h3>
+            <div className="rounded-lg border border-crusader-gold/20 bg-gradient-to-br from-crusader-navy/50 to-crusader-wood-dark/60 p-5 relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-crusader-gold/5 blur-2xl rounded-full pointer-events-none" />
+              <Map size={22} className="text-crusader-gold mb-3 drop-shadow-[0_0_8px_rgba(201,168,76,0.5)]" />
+              <h3 className="font-cinzel text-sm font-bold text-crusader-gold tracking-[0.1em] uppercase mb-2">Create Your Map</h3>
               <p className="text-sm text-crusader-gold/50 mb-4 leading-relaxed">
                 Design a custom battlefield — from a single country to the entire globe.
               </p>
               <Link href="/map-creator">
-                <Button fullWidth variant="gold" size="sm" icon={<PenTool size={13} />}>
+                <Button fullWidth variant="gold" size="sm" icon={<PenTool size={13} />} className="font-cinzel tracking-widest">
                   Open Map Creator
                 </Button>
               </Link>
-            </Card>
+            </div>
           </div>
         </div>
       </main>

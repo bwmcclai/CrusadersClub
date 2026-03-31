@@ -162,6 +162,16 @@ function GameGlobeMap({
     })
   }, [territories, tsMap, playerMap, attackFrom, attackTo, fortifyFrom, fortifyTo, attackFromAdj])
 
+  // Center the globe on the centroid of the map's territories
+  const focusLatLon = useMemo((): [number, number] | undefined => {
+    if (!territories.length) return undefined
+    const avgX = territories.reduce((s, t) => s + t.seed[0], 0) / territories.length
+    const avgY = territories.reduce((s, t) => s + t.seed[1], 0) / territories.length
+    const lon = avgX / 1200 * 360 - 180
+    const lat = 90 - avgY / 600 * 180
+    return [lat, lon]
+  }, [territories])
+
   return (
     <EarthGlobe
       territories={territories}
@@ -170,6 +180,7 @@ function GameGlobeMap({
       onTerritoryClick={isMyTurn ? onClick : undefined}
       showContinentLabels={false}
       cameraDistance={2.2}
+      focusLatLon={focusLatLon}
       className="w-full h-full"
     />
   )
@@ -996,55 +1007,122 @@ export default function GamePage() {
   const maxFortifyAmt = fortifyFrom ? (tsMap.get(fortifyFrom)?.armies ?? 1) - 1 : 0
 
   return (
-    <div className="h-screen bg-crusader-void flex flex-col overflow-hidden">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="shrink-0 h-12 mt-20 flex items-center justify-between px-5 border-b border-crusader-gold/10" style={{ background: 'rgba(8,6,4,0.90)' }}>
-        <div className="flex items-center gap-4">
-          <Link href="/lobby" className="text-crusader-gold/30 hover:text-crusader-gold transition-colors"><ArrowLeft size={16} /></Link>
-          <h1 className="font-cinzel text-sm font-bold text-crusader-gold tracking-widest">{game.name}</h1>
-          <span className="text-[10px] font-cinzel text-crusader-gold/30 tracking-wider">TURN {game.turnNumber}</span>
+    <div className="fixed inset-0 pt-20 flex flex-col overflow-hidden z-40" style={{ background: '#050403' }}>
+
+      {/* ── Compact Game Header ──────────────────────────────────────────────── */}
+      <div
+        className="shrink-0 h-11 flex items-center justify-between px-4 border-b border-crusader-gold/20"
+        style={{ background: 'rgba(10,8,5,0.98)', backdropFilter: 'blur(12px)' }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <Link href="/lobby" className="text-crusader-gold/30 hover:text-crusader-gold transition-colors shrink-0">
+            <ArrowLeft size={15} />
+          </Link>
+          <h1 className="font-cinzel text-sm font-bold text-crusader-gold tracking-widest truncate">{game.name}</h1>
+          <span className="shrink-0 text-[9px] font-cinzel text-crusader-gold/40 tracking-wider border border-crusader-gold/20 px-2 py-0.5 rounded-full">
+            TURN {game.turnNumber}
+          </span>
         </div>
 
-        {/* Player strip */}
-        <div className="flex items-center gap-2">
-          {players.filter(p => !p.isEliminated).map(p => {
-            const isCurrent = p.id === game.currentTurnPlayerId
+        {/* Phase indicator — center */}
+        <div className="flex items-center">
+          {isMyTurn && (
+            <div className={`flex items-center gap-2 px-4 py-1 rounded-full border font-cinzel text-[11px] tracking-widest font-semibold transition-all ${
+              phase === 'deploy'
+                ? 'border-yellow-400/50 bg-yellow-400/10 text-yellow-300 shadow-[0_0_16px_rgba(250,204,21,0.15)]'
+                : phase === 'attack'
+                ? 'border-red-400/50 bg-red-400/10 text-red-300 shadow-[0_0_16px_rgba(248,113,113,0.15)]'
+                : 'border-blue-400/50 bg-blue-400/10 text-blue-300 shadow-[0_0_16px_rgba(96,165,250,0.15)]'
+            }`}>
+              {phase === 'deploy' && <Shield size={12} />}
+              {phase === 'attack' && <Crosshair size={12} />}
+              {phase === 'fortify' && <ArrowRightLeft size={12} />}
+              <span>
+                {phase === 'deploy' ? `DEPLOY  ·  ${deployLeft} LEFT`
+                  : phase === 'attack' ? 'ATTACK PHASE'
+                  : 'FORTIFY PHASE'}
+              </span>
+            </div>
+          )}
+          {!isMyTurn && currentTP && (
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: currentTP.color, boxShadow: `0 0 6px ${currentTP.color}` }} />
+              <span className="text-[11px] font-cinzel tracking-wider" style={{ color: currentTP.color + 'CC' }}>
+                {currentTP.username}&apos;s turn{currentTP.isAi ? ' (AI)' : ''}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="w-48 shrink-0" />
+      </div>
+
+      {/* ── Main content ─────────────────────────────────────────────────────── */}
+      <main className="flex-1 flex overflow-hidden">
+
+        {/* ── Left Player Panel ──────────────────────────────────────────────── */}
+        <div
+          className="w-[76px] shrink-0 flex flex-col items-center gap-4 py-5 border-r border-crusader-gold/15 overflow-y-auto scrollbar-none"
+          style={{ background: 'rgba(8,6,3,0.92)' }}
+        >
+          {players.map(p => {
             const tCount = tsList.filter(ts => ts.ownerId === p.id).length
+            const aCount = tsList.filter(ts => ts.ownerId === p.id).reduce((s, ts) => s + ts.armies, 0)
+            const isCurrent = p.id === game.currentTurnPlayerId
             return (
-              <div key={p.id} className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-cinzel tracking-wide border transition-all ${
-                isCurrent ? 'border-current opacity-100 shadow-[0_0_8px_currentColor]' : 'border-transparent opacity-40'
-              }`} style={{ color: p.color, borderColor: isCurrent ? p.color : 'transparent' }}>
-                <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-                <span>{p.username}</span>
-                <span className="opacity-50">{tCount}t</span>
+              <div key={p.id} className={`relative flex flex-col items-center gap-1.5 transition-all ${p.isEliminated ? 'opacity-20 grayscale' : ''}`}>
+                {/* Glow ring behind avatar for current player */}
+                {isCurrent && (
+                  <div
+                    className="absolute -inset-1 rounded-full blur-md opacity-60 pointer-events-none"
+                    style={{ background: p.color }}
+                  />
+                )}
+                {/* Avatar circle */}
+                <div
+                  className="relative w-12 h-12 rounded-full flex items-center justify-center font-cinzel font-bold text-base border-2 z-10"
+                  style={{
+                    borderColor: p.color,
+                    background: `radial-gradient(circle at 35% 35%, ${p.color}55, ${p.color}18)`,
+                    color: p.color,
+                    boxShadow: isCurrent
+                      ? `0 0 0 2px ${p.color}40, 0 0 16px 4px ${p.color}50`
+                      : `inset 0 1px 0 ${p.color}30`,
+                  }}
+                >
+                  {p.username[0].toUpperCase()}
+                  {/* Army count badge */}
+                  <div
+                    className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold font-cinzel border"
+                    style={{
+                      background: '#0a0806',
+                      borderColor: p.color + '80',
+                      color: '#fff',
+                    }}
+                  >
+                    {aCount > 99 ? '99+' : aCount}
+                  </div>
+                </div>
+                {/* Name */}
+                <span
+                  className="text-[8px] font-cinzel tracking-wide text-center leading-none max-w-[68px] truncate"
+                  style={{ color: isCurrent ? p.color : 'rgba(201,168,76,0.45)' }}
+                >
+                  {p.username}
+                </span>
+                {/* Territory count */}
+                <span className="text-[9px] font-cinzel" style={{ color: p.color + '99' }}>
+                  {tCount}t
+                </span>
+                {p.isAi && (
+                  <span className="text-[7px] uppercase font-cinzel text-crusader-gold/25 border border-crusader-gold/15 px-1 rounded leading-none py-px">AI</span>
+                )}
               </div>
             )
           })}
         </div>
 
-        {/* Phase indicator */}
-        <div className="flex items-center gap-2">
-          {isMyTurn && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-crusader-gold/40 bg-crusader-gold/10">
-              {phase === 'deploy' && <Shield size={11} className="text-crusader-gold" />}
-              {phase === 'attack' && <Crosshair size={11} className="text-red-400" />}
-              {phase === 'fortify' && <ArrowRightLeft size={11} className="text-blue-400" />}
-              <span className="text-[10px] font-cinzel tracking-wider text-crusader-gold">
-                {phase === 'deploy' ? `DEPLOY (${deployLeft})` : phase === 'attack' ? 'ATTACK' : 'FORTIFY'}
-              </span>
-            </div>
-          )}
-          {!isMyTurn && currentTP && (
-            <span className="text-[10px] font-cinzel text-crusader-gold/40 tracking-wider">
-              {currentTP.username}&apos;s turn{currentTP.isAi ? ' (AI)' : ''}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Main ───────────────────────────────────────────────────────────── */}
-      <main className="flex-1 flex overflow-hidden">
-        {/* Map */}
+        {/* ── Globe Map ──────────────────────────────────────────────────────── */}
         <div className="flex-1 relative">
           <GameGlobeMap
             territories={mapTerritories} tsMap={tsMap} playerMap={playerMap}
@@ -1055,56 +1133,68 @@ export default function GamePage() {
           />
         </div>
 
-        {/* ── Right sidebar ──────────────────────────────────────────────── */}
-        <div className="w-72 flex flex-col border-l border-crusader-gold/10 overflow-hidden" style={{ background: 'rgba(6,5,3,0.92)' }}>
-
+        {/* ── Right Sidebar ──────────────────────────────────────────────────── */}
+        <div
+          className="w-80 flex flex-col border-l border-crusader-gold/20 overflow-hidden"
+          style={{ background: 'linear-gradient(180deg, rgba(14,10,6,0.98) 0%, rgba(10,7,4,0.98) 100%)' }}
+        >
           {/* Action error */}
           {actionError && (
-            <div className="shrink-0 px-4 py-2 bg-red-900/20 border-b border-red-400/20">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-cinzel text-red-400">{actionError}</p>
-                <button onClick={() => setActionError(null)} className="text-red-400/50 hover:text-red-400 text-xs ml-2">&times;</button>
+            <div className="shrink-0 px-4 py-2.5 border-b border-red-400/20" style={{ background: 'rgba(127,29,29,0.25)' }}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-cinzel text-red-300">{actionError}</p>
+                <button onClick={() => setActionError(null)} className="text-red-400/50 hover:text-red-300 transition-colors text-sm shrink-0">&times;</button>
               </div>
             </div>
           )}
 
-          {/* Action panel */}
+          {/* ── Action Panel ─────────────────────────────────────────── */}
           {isMyTurn && (
-            <div className="shrink-0 p-4 border-b border-crusader-gold/10 space-y-3">
+            <div className="shrink-0 border-b border-crusader-gold/15" style={{ background: 'rgba(20,14,7,0.6)' }}>
+
               {phase === 'deploy' && (
-                <div className="text-center space-y-3">
-                  <div>
-                    <p className="font-cinzel text-xs text-crusader-gold/60 mb-1">Click your territories to deploy</p>
-                    <p className="font-cinzel text-2xl font-bold text-crusader-gold">{deployLeft}</p>
-                    <p className="font-cinzel text-[10px] text-crusader-gold/35 tracking-widest">ARMIES REMAINING</p>
+                <div className="p-5 space-y-4">
+                  {/* Big deploy counter */}
+                  <div className="text-center py-2">
+                    <p className="font-cinzel text-[9px] tracking-[0.3em] text-crusader-gold/50 mb-2">ARMIES TO DEPLOY</p>
+                    <p
+                      className="font-cinzel text-6xl font-bold leading-none"
+                      style={{
+                        color: '#F5C842',
+                        textShadow: '0 0 30px rgba(245,200,66,0.6), 0 0 60px rgba(245,200,66,0.2)',
+                      }}
+                    >
+                      {deployLeft}
+                    </p>
+                    <p className="font-cinzel text-[9px] tracking-[0.25em] text-crusader-gold/35 mt-2">CLICK YOUR TERRITORIES</p>
                   </div>
+
                   {myCards.length > 0 && (
                     <button
                       onClick={() => setShowCards(!showCards)}
-                      className="flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded border border-crusader-gold/20 hover:border-crusader-gold/40 transition-colors"
+                      className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg border border-crusader-gold/25 hover:border-crusader-gold/50 transition-all hover:bg-crusader-gold/5"
                     >
-                      <Layers size={12} className="text-crusader-gold/60" />
-                      <span className="text-[10px] font-cinzel text-crusader-gold/60">
-                        Cards ({myCards.length})
-                      </span>
+                      <Layers size={13} className="text-crusader-gold/60" />
+                      <span className="text-[11px] font-cinzel text-crusader-gold/60 tracking-wide">Cards ({myCards.length})</span>
                     </button>
                   )}
+
                   {showCards && (
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-1.5 justify-center">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap gap-2 justify-center">
                         {myCards.map(card => {
                           const isSelected = selectedCards.includes(card.id)
                           const typeIcon = card.cardType === 'infantry' ? '♟' : card.cardType === 'cavalry' ? '♞' : card.cardType === 'artillery' ? '♜' : '★'
-                          const typeColor = card.cardType === 'infantry' ? 'border-green-400/40 bg-green-400/10' : card.cardType === 'cavalry' ? 'border-blue-400/40 bg-blue-400/10' : card.cardType === 'artillery' ? 'border-red-400/40 bg-red-400/10' : 'border-yellow-400/40 bg-yellow-400/10'
+                          const typeColor = card.cardType === 'infantry' ? 'border-green-400/50 bg-green-400/10' : card.cardType === 'cavalry' ? 'border-blue-400/50 bg-blue-400/10' : card.cardType === 'artillery' ? 'border-red-400/50 bg-red-400/10' : 'border-yellow-400/50 bg-yellow-400/10'
                           return (
                             <button
                               key={card.id}
                               onClick={() => toggleCardSelection(card.id)}
-                              className={`w-12 h-16 rounded border-2 flex flex-col items-center justify-center gap-0.5 transition-all ${typeColor} ${
-                                isSelected ? 'ring-2 ring-crusader-gold scale-105' : 'opacity-70 hover:opacity-100'
+                              className={`w-12 h-16 rounded-lg border-2 flex flex-col items-center justify-center gap-0.5 transition-all ${typeColor} ${
+                                isSelected ? 'ring-2 ring-crusader-gold scale-105 shadow-[0_0_12px_rgba(201,168,76,0.4)]' : 'opacity-60 hover:opacity-90'
                               }`}
                             >
-                              <span className="text-lg">{typeIcon}</span>
+                              <span className="text-xl">{typeIcon}</span>
                               <span className="text-[7px] font-cinzel text-crusader-gold/50 uppercase leading-none">{card.cardType === 'wild' ? 'Wild' : card.cardType.slice(0, 3)}</span>
                             </button>
                           )
@@ -1134,130 +1224,184 @@ export default function GamePage() {
               )}
 
               {phase === 'attack' && (
-                <>
-                  {!attackFrom && (
-                    <p className="font-cinzel text-xs text-crusader-gold/60 text-center">Select a territory to attack from (2+ armies)</p>
-                  )}
-                  {attackFrom && !attackTo && (
-                    <p className="font-cinzel text-xs text-red-400/70 text-center">Select an adjacent enemy territory</p>
-                  )}
+                <div className="p-5 space-y-4">
+                  <div className="text-center space-y-1">
+                    <Crosshair size={32} className="mx-auto text-red-400 drop-shadow-[0_0_12px_rgba(248,113,113,0.6)]" />
+                    {!attackFrom && (
+                      <div>
+                        <p className="font-cinzel text-sm text-white/80 font-semibold">Select attacker</p>
+                        <p className="font-cinzel text-[10px] text-crusader-gold/40 mt-0.5">Choose a territory with 2+ armies</p>
+                      </div>
+                    )}
+                    {attackFrom && !attackTo && (
+                      <div>
+                        <p className="font-cinzel text-sm text-red-300 font-semibold">Select target</p>
+                        <p className="font-cinzel text-[10px] text-red-400/40 mt-0.5">Choose an adjacent enemy territory</p>
+                      </div>
+                    )}
+                  </div>
+
                   {attackFrom && attackTo && (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between text-xs font-cinzel">
-                        <span className="text-crusader-gold/60">Attack dice:</span>
-                        <div className="flex gap-1">
+                      <div className="flex items-center justify-between font-cinzel">
+                        <span className="text-[11px] text-crusader-gold/60">Attack dice</span>
+                        <div className="flex gap-1.5">
                           {[1, 2, 3].map(n => (
-                            <button key={n} disabled={n > maxAttackDice}
+                            <button
+                              key={n}
+                              disabled={n > maxAttackDice}
                               onClick={() => setAttackDiceCount(n)}
-                              className={`w-7 h-7 rounded border text-xs font-bold transition-all ${
-                                attackDiceCount === n ? 'border-red-400 bg-red-400/20 text-red-400' : 'border-crusader-gold/20 text-crusader-gold/40'
-                              } ${n > maxAttackDice ? 'opacity-20' : ''}`}>
+                              className={`w-8 h-8 rounded-lg border text-sm font-bold transition-all ${
+                                attackDiceCount === n
+                                  ? 'border-red-400 bg-red-500/20 text-red-300 shadow-[0_0_10px_rgba(248,113,113,0.4)]'
+                                  : 'border-white/10 text-white/30 hover:border-white/25'
+                              } ${n > maxAttackDice ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}`}
+                            >
                               {n}
                             </button>
                           ))}
                         </div>
                       </div>
                       <Button fullWidth size="sm" onClick={doAttack} loading={actionLock}
-                        icon={<Dices size={14} />} className="!bg-red-900/30 !border-red-400/40 hover:!bg-red-900/50 !text-red-300">
-                        Roll Attack
+                        icon={<Dices size={14} />}
+                        className="!bg-red-900/40 !border-red-500/50 hover:!bg-red-800/50 !text-red-200 !shadow-[0_0_16px_rgba(239,68,68,0.2)] !font-semibold">
+                        Roll Dice
                       </Button>
                     </div>
                   )}
-                  {/* Dice result */}
+
                   {lastDice && (
-                    <div className="bg-crusader-void/50 rounded-lg p-3 border border-crusader-gold/10 space-y-2">
+                    <div
+                      className="rounded-xl p-4 border space-y-3"
+                      style={{ background: 'rgba(15,8,4,0.8)', borderColor: 'rgba(201,168,76,0.2)' }}
+                    >
                       <div className="flex items-center justify-between">
-                        <div className="flex gap-1">
+                        <div className="flex gap-1.5">
                           {lastDice.attack_dice.sort((a: number, b: number) => b - a).map((d: number, i: number) => (
-                            <div key={i} className="w-6 h-6 rounded bg-red-700 text-white text-xs font-bold flex items-center justify-center">{d}</div>
+                            <div
+                              key={i}
+                              className="w-9 h-9 rounded-lg border flex items-center justify-center text-sm font-bold text-white font-cinzel"
+                              style={{ background: 'rgba(185,28,28,0.6)', borderColor: 'rgba(239,68,68,0.5)', boxShadow: '0 0 8px rgba(239,68,68,0.3)' }}
+                            >
+                              {d}
+                            </div>
                           ))}
                         </div>
-                        <span className="text-[10px] text-crusader-gold/30 font-cinzel">vs</span>
-                        <div className="flex gap-1">
+                        <span className="text-[10px] text-crusader-gold/40 font-cinzel">vs</span>
+                        <div className="flex gap-1.5">
                           {lastDice.defend_dice.sort((a: number, b: number) => b - a).map((d: number, i: number) => (
-                            <div key={i} className="w-6 h-6 rounded bg-blue-700 text-white text-xs font-bold flex items-center justify-center">{d}</div>
+                            <div
+                              key={i}
+                              className="w-9 h-9 rounded-lg border flex items-center justify-center text-sm font-bold text-white font-cinzel"
+                              style={{ background: 'rgba(29,78,216,0.6)', borderColor: 'rgba(96,165,250,0.5)', boxShadow: '0 0 8px rgba(96,165,250,0.3)' }}
+                            >
+                              {d}
+                            </div>
                           ))}
                         </div>
                       </div>
-                      <p className="text-[10px] font-cinzel text-crusader-gold/50 text-center">
-                        Attacker lost {lastDice.attacker_losses} · Defender lost {lastDice.defender_losses}
-                      </p>
+                      <div className="flex justify-center gap-4 text-[11px] font-cinzel font-semibold">
+                        <span className="text-red-400">−{lastDice.attacker_losses} attacker</span>
+                        <span className="text-crusader-gold/30">·</span>
+                        <span className="text-blue-400">−{lastDice.defender_losses} defender</span>
+                      </div>
                     </div>
                   )}
+
                   <Button fullWidth size="sm" variant="outline" onClick={skipToFortify}>
                     Done Attacking
                   </Button>
-                </>
+                </div>
               )}
 
               {phase === 'fortify' && (
-                <>
-                  {!fortifyFrom && (
-                    <p className="font-cinzel text-xs text-crusader-gold/60 text-center">Select a territory to move armies from</p>
-                  )}
-                  {fortifyFrom && !fortifyTo && (
-                    <p className="font-cinzel text-xs text-blue-400/70 text-center">Select a connected territory to move to</p>
-                  )}
+                <div className="p-5 space-y-4">
+                  <div className="text-center space-y-1">
+                    <ArrowRightLeft size={32} className="mx-auto text-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.6)]" />
+                    {!fortifyFrom && (
+                      <div>
+                        <p className="font-cinzel text-sm text-white/80 font-semibold">Move armies</p>
+                        <p className="font-cinzel text-[10px] text-crusader-gold/40 mt-0.5">Select a territory to move from</p>
+                      </div>
+                    )}
+                    {fortifyFrom && !fortifyTo && (
+                      <div>
+                        <p className="font-cinzel text-sm text-blue-300 font-semibold">Select destination</p>
+                        <p className="font-cinzel text-[10px] text-blue-400/40 mt-0.5">Must be connected to your territory</p>
+                      </div>
+                    )}
+                  </div>
+
                   {fortifyFrom && fortifyTo && (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between text-xs font-cinzel">
-                        <span className="text-crusader-gold/60">Move armies:</span>
-                        <div className="flex items-center gap-2">
-                          <input type="range" min={1} max={maxFortifyAmt} value={fortifyAmount}
-                            onChange={e => setFortifyAmount(Number(e.target.value))}
-                            className="w-20 accent-blue-400" />
-                          <span className="text-blue-400 font-bold w-5 text-right">{fortifyAmount}</span>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between font-cinzel text-[11px]">
+                          <span className="text-crusader-gold/60">Armies to move</span>
+                          <span className="text-blue-300 font-bold text-base">{fortifyAmount}</span>
                         </div>
+                        <input
+                          type="range" min={1} max={maxFortifyAmt} value={fortifyAmount}
+                          onChange={e => setFortifyAmount(Number(e.target.value))}
+                          className="w-full accent-blue-400"
+                        />
                       </div>
                       <Button fullWidth size="sm" onClick={doFortify} loading={actionLock}
-                        icon={<ArrowRightLeft size={14} />} className="!border-blue-400/40 !text-blue-300">
+                        icon={<ArrowRightLeft size={14} />}
+                        className="!border-blue-400/50 !text-blue-200 !bg-blue-900/30 hover:!bg-blue-800/40 !shadow-[0_0_12px_rgba(96,165,250,0.15)]">
                         Fortify &amp; End Turn
                       </Button>
                     </div>
                   )}
+
                   <Button fullWidth size="sm" variant="outline" onClick={skipFortifyEndTurn}>
                     Skip &amp; End Turn
                   </Button>
-                </>
+                </div>
               )}
             </div>
           )}
 
-          {/* Player stats */}
-          <div className="shrink-0 p-4 border-b border-crusader-gold/10">
-            <h3 className="font-cinzel text-[10px] text-crusader-gold/35 tracking-[0.2em] uppercase mb-2">COMMANDERS</h3>
-            <div className="space-y-1.5">
-              {players.map(p => {
-                const tCount = tsList.filter(ts => ts.ownerId === p.id).length
-                const aCount = tsList.filter(ts => ts.ownerId === p.id).reduce((s, ts) => s + ts.armies, 0)
-                const isCurrent = p.id === game.currentTurnPlayerId
-                return (
-                  <div key={p.id} className={`flex items-center gap-2 px-2 py-1.5 rounded transition-all ${
-                    p.isEliminated ? 'opacity-25 line-through' : isCurrent ? 'bg-crusader-gold/5' : ''
-                  }`}>
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color, boxShadow: isCurrent ? `0 0 6px ${p.color}` : 'none' }} />
-                    <span className="text-[11px] font-cinzel text-crusader-gold/70 flex-1 truncate">{p.username}</span>
-                    {p.isAi && <span className="text-[8px] uppercase text-crusader-gold/25 border border-crusader-gold/10 px-1 rounded">AI</span>}
-                    <span className="text-[10px] text-crusader-gold/30 font-cinzel">{tCount}t · {aCount}a</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Bonus groups */}
+          {/* ── Bonus Regions ────────────────────────────────────────── */}
           {bonusGroups.length > 0 && (
-            <div className="shrink-0 p-4 border-b border-crusader-gold/10">
-              <h3 className="font-cinzel text-[10px] text-crusader-gold/35 tracking-[0.2em] uppercase mb-2">BONUS REGIONS</h3>
-              <div className="space-y-1">
+            <div className="shrink-0 px-5 py-4 border-b border-crusader-gold/15">
+              <h3 className="font-cinzel text-[9px] tracking-[0.3em] uppercase mb-3 flex items-center gap-2 text-crusader-gold/50">
+                <Crown size={9} />
+                BONUS REGIONS
+              </h3>
+              <div className="space-y-3">
                 {bonusGroups.map(bg => {
                   const owned = myGP ? bg.territory_ids.filter(tid => tsMap.get(tid)?.ownerId === myGP.id).length : 0
+                  const pct = bg.territory_ids.length > 0 ? owned / bg.territory_ids.length : 0
+                  const complete = owned === bg.territory_ids.length
                   return (
-                    <div key={bg.id} className="flex items-center justify-between text-[10px] font-cinzel">
-                      <span className="text-crusader-gold/50 truncate flex-1">{bg.name}</span>
-                      <span className={owned === bg.territory_ids.length ? 'text-crusader-gold font-bold' : 'text-crusader-gold/25'}>
-                        {owned}/{bg.territory_ids.length} · +{bg.bonus_armies}
-                      </span>
+                    <div key={bg.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className={`font-cinzel text-[11px] ${complete ? 'text-crusader-gold font-semibold' : 'text-white/60'}`}>
+                          {bg.name}
+                        </span>
+                        <span
+                          className="font-cinzel text-[11px] font-bold px-2 py-0.5 rounded-full border"
+                          style={complete
+                            ? { color: '#F5C842', borderColor: 'rgba(245,200,66,0.4)', background: 'rgba(245,200,66,0.1)', textShadow: '0 0 8px rgba(245,200,66,0.5)' }
+                            : { color: 'rgba(201,168,76,0.3)', borderColor: 'rgba(201,168,76,0.1)', background: 'transparent' }
+                          }
+                        >
+                          +{bg.bonus_armies}
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${pct * 100}%`,
+                            background: complete
+                              ? 'linear-gradient(90deg, rgba(201,168,76,0.7), rgba(245,200,66,0.9))'
+                              : 'rgba(201,168,76,0.3)',
+                            boxShadow: complete ? '0 0 6px rgba(245,200,66,0.5)' : 'none',
+                          }}
+                        />
+                      </div>
+                      <p className="text-[9px] font-cinzel text-white/25">{owned}/{bg.territory_ids.length} territories</p>
                     </div>
                   )
                 })}
@@ -1265,25 +1409,31 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Event log */}
-          <div className="flex-1 overflow-y-auto p-4 scrollbar-none min-h-0">
-            <h3 className="font-cinzel text-[10px] text-crusader-gold/35 tracking-[0.2em] uppercase mb-2">BATTLE LOG</h3>
-            <div className="space-y-1">
+          {/* ── Battle Log ───────────────────────────────────────────── */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-none min-h-0">
+            <h3 className="font-cinzel text-[9px] tracking-[0.3em] uppercase mb-3 text-crusader-gold/50">BATTLE LOG</h3>
+            <div className="space-y-2">
               {events.slice(-30).reverse().map(ev => {
                 const pName = ev.gamePlayerId ? playerMap.get(ev.gamePlayerId)?.username ?? '?' : 'System'
+                const pColor = ev.gamePlayerId ? playerMap.get(ev.gamePlayerId)?.color : undefined
                 let text = ''
-                if (ev.eventType === 'start') text = 'Game started!'
-                else if (ev.eventType === 'deploy') text = `${pName} deployed to ${ev.eventData?.territory_id}`
-                else if (ev.eventType === 'attack') text = `${pName} attacked ${ev.eventData?.to} from ${ev.eventData?.from}${ev.eventData?.conquered ? ' — CONQUERED!' : ''}`
-                else if (ev.eventType === 'fortify') text = `${pName} fortified ${ev.eventData?.to}`
-                else if (ev.eventType === 'win') text = `${pName} wins the game!`
-                else text = `${pName}: ${ev.eventType}`
+                let accent = 'text-white/35'
+                if (ev.eventType === 'start') { text = 'Game started'; accent = 'text-crusader-gold/60' }
+                else if (ev.eventType === 'deploy') { text = `deployed to ${ev.eventData?.territory_id}`; accent = 'text-white/35' }
+                else if (ev.eventType === 'attack') {
+                  text = ev.eventData?.conquered
+                    ? `conquered ${ev.eventData?.to}!`
+                    : `attacked ${ev.eventData?.to}`
+                  accent = ev.eventData?.conquered ? 'text-crusader-gold/80' : 'text-red-400/60'
+                }
+                else if (ev.eventType === 'fortify') { text = `fortified ${ev.eventData?.to}`; accent = 'text-blue-400/50' }
+                else if (ev.eventType === 'win') { text = 'wins the game!'; accent = 'text-crusader-gold' }
+                else { text = ev.eventType; accent = 'text-white/25' }
                 return (
-                  <div key={ev.id} className={`text-[10px] font-cinzel leading-relaxed ${
-                    ev.eventType === 'attack' ? (ev.eventData?.conquered ? 'text-crusader-gold/70' : 'text-red-400/50')
-                    : ev.eventType === 'win' ? 'text-crusader-gold'
-                    : 'text-crusader-gold/35'
-                  }`}>
+                  <div key={ev.id} className={`text-[10px] font-cinzel leading-relaxed ${accent}`}>
+                    {ev.eventType !== 'start' && ev.eventType !== 'win' && (
+                      <span style={{ color: pColor ?? 'rgba(201,168,76,0.6)' }}>{pName} </span>
+                    )}
                     {text}
                   </div>
                 )

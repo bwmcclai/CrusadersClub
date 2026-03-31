@@ -1,28 +1,19 @@
 'use client'
 import dynamic from 'next/dynamic'
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { generateZonesFromCities } from '@/lib/utils'
-import { getCitiesForCountries, type CityFull } from '@/lib/citiesData'
+import { getCitiesForCountries, getCapitalsForCountries, type CityFull } from '@/lib/citiesData'
 import type { MarkerDef } from '@/components/three/EarthGlobe'
-import {
-  type ContinentId, getCountryName, getContinent, getContinentCountryIds,
-  CONTINENT_INFO,
-} from '@/lib/geoData'
+import { getCountryName, getContinentCountryIds, CONTINENT_COUNTRIES } from '@/lib/geoData'
 import { feature } from 'topojson-client'
+import type { Topology, GeometryCollection } from 'topojson-specification'
 import { geoContains } from 'd3-geo'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import type { BonusGroup, Territory } from '@/types'
-import {
-  Globe, Map as MapIcon, Layers,
-  Save, CheckCircle, Plus, Sword,
-  X, Shuffle, MapPin, ZoomIn, ZoomOut,
-  ChevronLeft,
-} from 'lucide-react'
-import ZoneCartogram from '@/components/map/ZoneCartogram'
+import { Globe, Save, X } from 'lucide-react'
 
 // --- Dynamic import (Three.js SSR guard) --------------------------------------
 
@@ -40,23 +31,9 @@ const EarthGlobe = dynamic(() => import('@/components/three/EarthGlobe'), {
 
 // --- Types ---------------------------------------------------------------------
 
-type MapMode = 'continent' | 'country' | 'province'
-type AppView = 'globe' | 'preview'
-
 interface MapMeta {
   name: string
   desc: string
-}
-
-// --- Zoom Thresholds ----------------------------------------------------------
-
-const CONTINENT_ZOOM = 3.8
-const COUNTRY_ZOOM = 2.5
-
-function getModeFromZoom(d: number): MapMode {
-  if (d >= CONTINENT_ZOOM) return 'continent'
-  if (d >= COUNTRY_ZOOM) return 'country'
-  return 'province'
 }
 
 // --- Helpers ------------------------------------------------------------------
@@ -154,71 +131,15 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Divider() {
-  return <div className="border-t border-crusader-gold/8 my-4" />
-}
-
-// --- Mode Indicator (globe overlay) ------------------------------------------
-
-function ModeIndicator({ mode }: { mode: MapMode }) {
-  const labels: Record<MapMode, { label: string; hint: string; icon: typeof Globe }> = {
-    continent: { label: 'Continent Mode', hint: 'Click to select entire continents', icon: Globe },
-    country: { label: 'Country Mode', hint: 'Click countries to add them to the map', icon: MapIcon },
-    province: { label: 'Fine Detail Mode', hint: 'Click individual territories', icon: Layers },
-  }
-  const { label, hint, icon: Icon } = labels[mode]
-  return (
-    <div className="absolute top-5 left-1/2 -translate-x-1/2 pointer-events-none z-10 flex flex-col items-center gap-1.5">
-      <div
-        className="flex items-center gap-2.5 px-5 py-2.5 rounded-full border border-crusader-gold/25 backdrop-blur-md"
-        style={{ background: 'rgba(8,6,4,0.70)' }}
-      >
-        <Icon size={13} className="text-crusader-gold" />
-        <span className="font-cinzel text-xs text-crusader-gold tracking-widest">{label}</span>
-      </div>
-      <p className="text-[10px] text-crusader-gold/45 font-cinzel tracking-wide">{hint}</p>
-    </div>
-  )
-}
-
-function ZoomGuide({ mode }: { mode: MapMode }) {
-  return (
-    <div className="absolute bottom-16 right-5 pointer-events-none z-10">
-      <div
-        className="flex flex-col gap-1.5 px-3 py-2.5 rounded-xl border border-crusader-gold/15 backdrop-blur-sm"
-        style={{ background: 'rgba(8,6,4,0.65)' }}
-      >
-        {([
-          { m: 'continent' as MapMode, label: 'Continents', Icon: ZoomOut },
-          { m: 'country' as MapMode, label: 'Countries', Icon: Globe },
-          { m: 'province' as MapMode, label: 'Provinces', Icon: ZoomIn },
-        ]).map(({ m, label, Icon }) => (
-          <div key={m} className={`flex items-center gap-2 text-[10px] font-cinzel tracking-wide ${mode === m ? 'text-crusader-gold' : 'text-crusader-gold/25'
-            }`}>
-            <Icon size={10} />
-            <span>{label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 
 // --- Page ---------------------------------------------------------------------
 
 export default function MapCreatorPage() {
-  const router = useRouter()
   const player = useAppStore((s) => s.player)
 
-  // -- View state ----------------------------------------------------------------
-  const [view, setView] = useState<AppView>('globe')
-
   // -- Globe interaction ---------------------------------------------------------
-  const [zoomDistance, setZoomDistance] = useState(2.8)
   const [selCountryIds, setSelCountryIds] = useState<number[]>([])
   const [selCountryFeats, setSelCountryFeats] = useState<GeoJSON.Feature[]>([])
-  const [selContinents, setSelContinents] = useState<ContinentId[]>([])
 
   // -- Map metadata --------------------------------------------------------------
   const [meta, setMeta] = useState<MapMeta>({ name: '', desc: '' })
@@ -237,20 +158,31 @@ export default function MapCreatorPage() {
       .catch(() => setAdmin1Features([]))
   }, [])
 
+  // -- World country features (for quick-select hot buttons) --------------------
+  const [worldFeatureMap, setWorldFeatureMap] = useState<Map<number, GeoJSON.Feature>>(new Map())
+
+  useEffect(() => {
+    fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json')
+      .then((r) => r.json())
+      .then((data: Topology) => {
+        const countries = feature(data, data.objects.countries as GeometryCollection)
+        const map = new Map<number, GeoJSON.Feature>()
+        countries.features.forEach((f) => {
+          const id = typeof f.id === 'string' ? parseInt(f.id) : (f.id as number ?? 0)
+          map.set(id, f)
+        })
+        setWorldFeatureMap(map)
+      })
+      .catch(console.error)
+  }, [])
+
   // -- Generated output ----------------------------------------------------------
   const [generatedCities,      setGeneratedCities]      = useState<CityFull[]>([])
   const [generatedTerritories, setGeneratedTerritories] = useState<Territory[]>([])
   const [bonusGroups,          setBonusGroups]          = useState<BonusGroup[]>([])
-  const [previewTab,           setPreviewTab]           = useState<'cartogram' | 'globe'>('globe')
-  const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState('')
-
-  const mapMode = getModeFromZoom(zoomDistance)
-  const globeSelMode = mapMode === 'continent' ? 'continent' : 'multi-country'
 
   const markers: MarkerDef[] = useMemo(() => generatedCities.map((c, i) => ({
     id: `city-${i}`,
@@ -258,36 +190,6 @@ export default function MapCreatorPage() {
     lon: c.lon,
     label: c.name,
   })), [generatedCities])
-
-  // -- Continent selection -------------------------------------------------------
-  const handleContinentSelect = useCallback((
-    continent: ContinentId,
-    countryIds: number[],
-    features: GeoJSON.Feature[],
-  ) => {
-    const already = selContinents.includes(continent)
-    if (already) {
-      setSelContinents((p) => p.filter((c) => c !== continent))
-      setSelCountryIds((p) => p.filter((id) => !countryIds.includes(id)))
-      setSelCountryFeats((p) => p.filter((f) => {
-        const fid = typeof f.id === 'string' ? parseInt(f.id) : (f.id as number)
-        return !countryIds.includes(fid)
-      }))
-    } else {
-      setSelContinents((p) => [...p, continent])
-      setSelCountryIds((p) => [...p, ...countryIds.filter((id) => !p.includes(id))])
-      setSelCountryFeats((p) => {
-        const existing = new Set(p.map((f) => typeof f.id === 'string' ? parseInt(f.id) : (f.id as number)))
-        return [...p, ...features.filter((f) => {
-          const fid = typeof f.id === 'string' ? parseInt(f.id) : (f.id as number)
-          return !existing.has(fid)
-        })]
-      })
-      if (!meta.name) {
-        setMeta((m) => ({ ...m, name: `${CONTINENT_INFO[continent].label} - ${new Date().getFullYear()}` }))
-      }
-    }
-  }, [selContinents, meta.name])
 
   // -- Country toggle ------------------------------------------------------------
   const handleCountryToggle = useCallback((id: number, _name: string, feat: GeoJSON.Feature) => {
@@ -306,9 +208,34 @@ export default function MapCreatorPage() {
   }, [])
 
   const clearAll = useCallback(() => {
-    setSelCountryIds([]); setSelCountryFeats([]); setSelContinents([])
+    setSelCountryIds([]); setSelCountryFeats([])
     setGeneratedCities([]); setGeneratedTerritories([]); setBonusGroups([]); setSavedId(null)
   }, [])
+
+  // -- Quick-select: toggle a set of country ISO ids (continent or whole globe) -
+  const handleQuickSelect = useCallback((ids: number[]) => {
+    const idSet = new Set(ids)
+    const allSelected = ids.every((id) => selCountryIds.includes(id))
+
+    if (allSelected) {
+      // Deselect all countries in this group
+      setSelCountryIds((p) => p.filter((id) => !idSet.has(id)))
+      setSelCountryFeats((p) => p.filter((f) => {
+        const fid = typeof f.id === 'string' ? parseInt(f.id) : (f.id as number)
+        return !idSet.has(fid)
+      }))
+    } else {
+      // Add any missing countries from this group
+      const missing = ids.filter((id) => !selCountryIds.includes(id))
+      const missingFeats = missing.flatMap((id) => {
+        const f = worldFeatureMap.get(id)
+        return f ? [f] : []
+      })
+      setSelCountryIds((p) => [...p, ...missing])
+      setSelCountryFeats((p) => [...p, ...missingFeats])
+    }
+    setSavedId(null)
+  }, [selCountryIds, worldFeatureMap])
 
   // -- Auto-generate zones when selection or count changes ---------------------
   useEffect(() => {
@@ -319,14 +246,30 @@ export default function MapCreatorPage() {
       return
     }
 
-    // Get all cities for selected countries sorted by population,
-    // then deduplicate to one city per state/province (most populous wins).
-    const allCities = getCitiesForCountries(selCountryIds)
-    const dedupedCities = admin1Features
-      ? deduplicateCitiesBySubdivision(allCities, admin1Features)
-      : allCities
-    const topCities = dedupedCities.slice(0, Math.max(2, zoneCount))
-    setGeneratedCities(topCities)
+    // Always guarantee one zone per selected country at its capital.
+    // Only add extra zones (largest cities) when zoneCount > countryCount.
+    const capitals = getCapitalsForCountries(selCountryIds)
+    const countryCount = selCountryIds.length
+
+    let citiesToUse: CityFull[]
+    if (zoneCount <= countryCount) {
+      // One zone per country at the capital — no subdivision needed
+      citiesToUse = capitals
+    } else {
+      // Capitals first, then fill remaining slots with top cities
+      const capitalKey = (c: CityFull) => `${c.country}:${c.name}`
+      const capitalKeys = new Set(capitals.map(capitalKey))
+      const allCities = getCitiesForCountries(selCountryIds)
+      const dedupedCities = admin1Features
+        ? deduplicateCitiesBySubdivision(allCities, admin1Features)
+        : allCities
+      const additional = dedupedCities
+        .filter((c) => !capitalKeys.has(capitalKey(c)))
+        .slice(0, zoneCount - countryCount)
+      citiesToUse = [...capitals, ...additional]
+    }
+
+    setGeneratedCities(citiesToUse)
 
     if (selCountryFeats.length === 0) {
       setGeneratedTerritories([])
@@ -336,7 +279,7 @@ export default function MapCreatorPage() {
     }
 
     // Generate Voronoi zones clipped to country boundaries
-    const result = generateZonesFromCities(dedupedCities, selCountryFeats, zoneCount)
+    const result = generateZonesFromCities(citiesToUse, selCountryFeats, citiesToUse.length)
 
     // Fix bonus group names (generateZonesFromCities uses placeholder names)
     const namedGroups: BonusGroup[] = result.bonusGroups.map((bg) => {
@@ -349,14 +292,7 @@ export default function MapCreatorPage() {
     setSavedId(null)
   }, [selCountryIds, selCountryFeats, zoneCount, admin1Features])
 
-  // -- Preview toggle ------------------------------------------------------------
-  function handleGenerate() {
-    if (selCountryIds.length === 0) return
-    setView('preview')
-  }
-
-  // -- Rename territory ----------------------------------------------------------
-  // -- Save ----------------------------------------------------------------------
+  // -- Save / Update -------------------------------------------------------------
   async function handleSave() {
     setSaveError(null)
     if (!player) { setSaveError('You must be signed in to save a map.'); return }
@@ -368,26 +304,35 @@ export default function MapCreatorPage() {
         ? computeRegionBounds(selCountryFeats)
         : { minLat: -90, maxLat: 90, minLon: -180, maxLon: 180 }
 
-      const regionName = selContinents.length > 0
-        ? selContinents.map((c) => CONTINENT_INFO[c].label).join(' + ')
-        : selCountryIds.slice(0, 5).map(getCountryName).filter(Boolean).join(', ') +
+      const regionName = selCountryIds.slice(0, 5).map(getCountryName).filter(Boolean).join(', ') +
         (selCountryIds.length > 5 ? ` +${selCountryIds.length - 5} more` : '')
 
-      const sb = getSupabaseClient()
-      const { data, error } = await sb.from('battle_maps').insert({
+      const payload = {
         name: meta.name.trim(),
         description: meta.desc.trim() || null,
-        author_id: player.id,
         region_name: regionName || 'Custom Region',
         region_bounds: bounds,
         country_iso_ids: selCountryIds,
         territories: generatedTerritories,
         bonus_groups: bonusGroups,
-        is_public: true,
-      }).select('id').single()
+      }
 
-      if (error) throw error
-      setSavedId(data.id)
+      const sb = getSupabaseClient()
+
+      if (savedId) {
+        // Already saved — update in place
+        const { error } = await sb.from('battle_maps').update(payload).eq('id', savedId)
+        if (error) throw error
+      } else {
+        // First save — insert
+        const { data, error } = await sb.from('battle_maps').insert({
+          ...payload,
+          author_id: player.id,
+          is_public: true,
+        }).select('id').single()
+        if (error) throw error
+        setSavedId(data.id)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'An unexpected error occurred.'
       setSaveError(msg)
@@ -400,280 +345,183 @@ export default function MapCreatorPage() {
 
   const canSave = !!player && meta.name.trim().length > 0 && generatedTerritories.length > 0
 
+  // -- Quick-select button definitions ------------------------------------------
+  const allCountryIds = useMemo(
+    () => Object.values(CONTINENT_COUNTRIES).flat(),
+    [],
+  )
+  const quickSelectGroups = useMemo(() => [
+    { label: 'Entire Globe', ids: allCountryIds, span: true },
+    { label: 'North America', ids: getContinentCountryIds('north-america'), span: false },
+    { label: 'South America', ids: getContinentCountryIds('south-america'), span: false },
+    { label: 'Europe',        ids: getContinentCountryIds('europe'),        span: false },
+    { label: 'Asia',          ids: getContinentCountryIds('asia'),          span: false },
+  ], [allCountryIds])
+
   return (
     <div className="h-screen bg-crusader-void flex flex-col overflow-hidden">
       <main className="flex-1 flex flex-row overflow-hidden pt-20">
 
-        {view === 'globe' ? (
-          <>
-            {/* ── Interactive Selection Globe ── */}
-            <div className="flex-1 relative overflow-hidden bg-crusader-void">
-              <EarthGlobe
-                interactive
-                autoRotate={false}
-                selectionMode={globeSelMode}
-                selectedIds={selCountryIds}
-                onContinentSelect={handleContinentSelect}
-                onMultiCountryToggle={handleCountryToggle}
-                onZoomChange={setZoomDistance}
-                markers={markers}
-                territories={generatedTerritories}
-                countryFeatures={selCountryFeats}
-                className="absolute inset-0 w-full h-full"
-              />
-              <ModeIndicator mode={mapMode} />
-              <ZoomGuide mode={mapMode} />
-            </div>
+        {/* ── Globe ── */}
+        <div className="flex-1 relative overflow-hidden bg-crusader-void">
+          <EarthGlobe
+            interactive
+            autoRotate={false}
+            selectionMode="multi-country"
+            selectedIds={selCountryIds}
+            onMultiCountryToggle={handleCountryToggle}
+            markers={markers}
+            territories={generatedTerritories}
+            countryFeatures={selCountryFeats}
+            className="absolute inset-0 w-full h-full"
+          />
 
-            {/* ── Globe Selection Panel ── */}
-            <div
-              className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10"
-              style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)', height: '100%' }}
-            >
-              {/* Header */}
-              <div className="shrink-0 px-5 pt-5 pb-3 border-b border-crusader-gold/10">
-                <h2 className="font-cinzel text-base font-bold text-crusader-gold">Map Creator</h2>
-                <p className="text-[11px] text-crusader-gold/35 font-cinzel mt-0.5">
-                  {selCountryIds.length > 0
-                    ? `${selCountryIds.length} region${selCountryIds.length !== 1 ? 's' : ''} selected · ${generatedTerritories.length} zones`
-                    : 'Click the globe to select regions'}
-                </p>
-              </div>
-
-              {/* Selected countries list — fills remaining space */}
-              <div className="flex-1 overflow-y-auto px-5 py-3 scrollbar-none min-h-0">
-                {selCountryIds.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-                    <Globe size={28} className="text-crusader-gold/20" />
-                    <p className="text-[11px] font-cinzel text-crusader-gold/30 leading-relaxed">
-                      Zoom in to enter Country Mode,<br />then click countries to add them
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <SectionHeader>Selected Regions ({selCountryIds.length})</SectionHeader>
-                    <div className="space-y-0.5">
-                      {selCountryIds.map((id) => (
-                        <div key={id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-crusader-gold/5 transition-colors group">
-                          <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-crusader-gold/40" />
-                          <span className="text-[11px] text-crusader-gold/65 flex-1 truncate font-cinzel">
-                            {getCountryName(id)}
-                          </span>
-                          <button
-                            onClick={() => removeCountry(id)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400/60 hover:text-red-400"
-                          >
-                            <X size={11} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.97)' }}>
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-cinzel text-crusader-gold/40 uppercase tracking-widest whitespace-nowrap">Zones</span>
-                  <input
-                    type="range" min={2} max={200} value={zoneCount}
-                    onChange={(e) => setZoneCount(Number(e.target.value))}
-                    className="flex-1 accent-crusader-gold cursor-pointer"
-                  />
-                  <span className="text-[11px] font-cinzel font-bold text-crusader-gold w-6 text-right">{zoneCount}</span>
-                </div>
-
-                {selCountryIds.length > 0 && (
-                  <Button fullWidth size="sm" variant="outline" icon={<X size={13} />} onClick={clearAll}>
-                    Clear Selection
-                  </Button>
-                )}
-
-                <Button
-                  fullWidth
-                  size="lg"
-                  disabled={selCountryIds.length === 0 || generatedTerritories.length === 0}
-                  onClick={handleGenerate}
-                  icon={<Sword size={15} />}
-                >
-                  Preview Map
-                </Button>
+          {/* Zone count badge */}
+          {generatedTerritories.length > 0 && (
+            <div className="absolute top-4 right-5 pointer-events-none">
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-teal-500/30 backdrop-blur-md"
+                style={{ background: 'rgba(8,6,4,0.70)' }}
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-teal-400" style={{ boxShadow: '0 0 6px rgba(77,217,172,0.8)' }} />
+                <span className="font-cinzel text-[11px] text-teal-300 tracking-widest">
+                  {generatedTerritories.length} Zones
+                </span>
               </div>
             </div>
-          </>
-        ) : (
-          <>
-            {/* ── Preview Zone Map ── */}
-            <div className="flex-1 relative overflow-hidden bg-crusader-void">
+          )}
+        </div>
 
-              {previewTab === 'cartogram' ? (
-                <div className="absolute inset-0 flex items-center justify-center p-4">
-                  <ZoneCartogram territories={generatedTerritories} />
-                </div>
-              ) : (
-                <EarthGlobe
-                  interactive
-                  autoRotate={false}
-                  selectionMode="none"
-                  markers={markers}
-                  territories={generatedTerritories}
-                  countryFeatures={selCountryFeats}
-                  className="absolute inset-0 w-full h-full"
-                />
-              )}
+        {/* ── Right Panel ── */}
+        <div
+          className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10"
+          style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)', height: '100%' }}
+        >
+          {/* Map Name — first thing at the top */}
+          <div className="shrink-0 px-5 pt-5 pb-4 border-b border-crusader-gold/10">
+            <h2 className="font-cinzel text-base font-bold text-crusader-gold mb-3">Map Creator</h2>
+            <Input
+              value={meta.name}
+              onChange={(e) => { setMeta((m) => ({ ...m, name: e.target.value })); setSaveError(null) }}
+              placeholder="Name your map..."
+            />
+            <p className="text-[10px] text-crusader-gold/30 font-cinzel mt-1.5">
+              {selCountryIds.length > 0
+                ? `${selCountryIds.length} region${selCountryIds.length !== 1 ? 's' : ''} selected · ${generatedTerritories.length} zones`
+                : 'Select regions on the globe below'}
+            </p>
+          </div>
 
-              {/* View toggle */}
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex">
-                {(['cartogram', 'globe'] as const).map((tab, i) => (
+          {/* Quick Select */}
+          <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
+            <SectionHeader>Quick Select</SectionHeader>
+            <div className="grid grid-cols-2 gap-1.5">
+              {quickSelectGroups.map(({ label, ids, span }) => {
+                const active = ids.length > 0 && ids.every((id) => selCountryIds.includes(id))
+                const partial = !active && ids.some((id) => selCountryIds.includes(id))
+                return (
                   <button
-                    key={tab}
-                    onClick={() => setPreviewTab(tab)}
-                    className={`px-4 py-1.5 text-[11px] font-cinzel tracking-wider border border-crusader-gold/25 backdrop-blur-md transition-colors ${
-                      i === 0 ? 'rounded-l-full' : 'rounded-r-full border-l-0'
-                    } ${
-                      previewTab === tab
-                        ? 'bg-crusader-gold/20 text-crusader-gold'
-                        : 'bg-crusader-void/70 text-crusader-gold/35 hover:text-crusader-gold/65'
-                    }`}
+                    key={label}
+                    onClick={() => handleQuickSelect(ids)}
+                    disabled={worldFeatureMap.size === 0}
+                    className={`
+                      ${span ? 'col-span-2' : ''}
+                      px-3 py-1.5 rounded-sm border font-cinzel text-[10px] tracking-wider
+                      transition-colors text-left
+                      ${active
+                        ? 'bg-crusader-gold/20 border-crusader-gold/60 text-crusader-gold'
+                        : partial
+                          ? 'bg-crusader-gold/8 border-crusader-gold/30 text-crusader-gold/70'
+                          : 'bg-crusader-dark/30 border-crusader-gold/15 text-crusader-gold/40 hover:border-crusader-gold/35 hover:text-crusader-gold/65'
+                      }
+                      disabled:opacity-30 disabled:cursor-not-allowed
+                    `}
                   >
-                    {tab === 'cartogram' ? 'Zone Map' : 'Globe'}
+                    {label}
+                    {partial && <span className="ml-1 opacity-60">·</span>}
                   </button>
-                ))}
-              </div>
-
-              {/* Zone count badge */}
-              <div className="absolute top-4 right-5 pointer-events-none">
-                <div
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-teal-500/30 backdrop-blur-md"
-                  style={{ background: 'rgba(8,6,4,0.70)' }}
-                >
-                  <div className="w-1.5 h-1.5 rounded-full bg-teal-400" style={{ boxShadow: '0 0 6px rgba(77,217,172,0.8)' }} />
-                  <span className="font-cinzel text-[11px] text-teal-300 tracking-widest">
-                    {generatedTerritories.length} Zones
-                  </span>
-                </div>
-              </div>
+                )
+              })}
             </div>
+          </div>
 
-            {/* ── Preview Right Panel ── */}
-            <div
-              className="w-80 xl:w-96 flex flex-col border-l border-crusader-gold/10"
-              style={{ background: 'rgba(6,5,3,0.92)', backdropFilter: 'blur(12px)', height: '100%' }}
-            >
-              {/* Header */}
-              <div className="shrink-0 px-5 pt-5 pb-3 border-b border-crusader-gold/10">
-                <button
-                  onClick={() => setView('globe')}
-                  className="flex items-center gap-1.5 text-[11px] font-cinzel text-crusader-gold/35 hover:text-crusader-gold/70 transition-colors mb-3"
-                >
-                  <ChevronLeft size={12} /> Back to Globe
-                </button>
-                <h2 className="font-cinzel text-base font-bold text-crusader-gold">{meta.name || 'Untitled Map'}</h2>
-                <p className="text-[11px] text-crusader-gold/35 font-cinzel mt-0.5">
-                  {generatedCities.length} zones · {bonusGroups.length} bonus groups
+          {/* Zones slider */}
+          <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-cinzel text-crusader-gold/40 uppercase tracking-widest whitespace-nowrap">Zones</span>
+              <input
+                type="range" min={2} max={200} value={zoneCount}
+                onChange={(e) => setZoneCount(Number(e.target.value))}
+                className="flex-1 accent-crusader-gold cursor-pointer"
+              />
+              <span className="text-[11px] font-cinzel font-bold text-crusader-gold w-6 text-right">{zoneCount}</span>
+            </div>
+          </div>
+
+          {/* Selected countries list — fills remaining space */}
+          <div className="flex-1 overflow-y-auto px-5 py-3 scrollbar-none min-h-0">
+            {selCountryIds.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+                <Globe size={28} className="text-crusader-gold/20" />
+                <p className="text-[11px] font-cinzel text-crusader-gold/30 leading-relaxed">
+                  Use Quick Select above or zoom in<br />and click countries on the globe
                 </p>
               </div>
-
-              {/* Map Name */}
-              <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
-                <SectionHeader>Map Name</SectionHeader>
-                <Input
-                  value={meta.name}
-                  onChange={(e) => { setMeta((m) => ({ ...m, name: e.target.value })); setSaveError(null) }}
-                  placeholder="Name your map..."
-                />
-              </div>
-
-              {/* Bonus Groups */}
-              {bonusGroups.length > 0 && (
-                <div className="shrink-0 px-5 pt-3 pb-3 border-b border-crusader-gold/8">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <SectionHeader>Bonus Groups</SectionHeader>
-                    <span className="text-[10px] font-cinzel text-crusader-gold/35 mb-2.5">
-                      {bonusGroups.length} group{bonusGroups.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {bonusGroups.map((bg) => (
-                      <div
-                        key={bg.id}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-crusader-gold/8 border border-crusader-gold/12 text-[10px] font-cinzel"
-                      >
-                        <span className="text-crusader-gold/65 truncate max-w-[80px]">{bg.name}</span>
-                        <span className="text-crusader-gold font-bold shrink-0">+{bg.bonus_armies}*</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Deployable Zones */}
-              <div className="flex-1 overflow-y-auto px-5 py-3 scrollbar-none min-h-0">
-                <SectionHeader>Deployable Zones ({generatedCities.length})</SectionHeader>
+            ) : (
+              <>
+                <SectionHeader>Selected Regions ({selCountryIds.length})</SectionHeader>
                 <div className="space-y-0.5">
-                  {generatedCities.map((c, i) => {
-                    const cont = getContinent(c.country)
-                    return (
-                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-crusader-gold/5 transition-colors">
-                        <div className="w-1.5 h-1.5 rounded-full shrink-0 border border-teal-400/60 bg-teal-900/60" />
-                        <span className="text-[11px] text-crusader-gold/65 flex-1 truncate font-cinzel">{c.name}</span>
-                        {cont && (
-                          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CONTINENT_INFO[cont]?.color ?? '#C9A84C' }} />
-                        )}
-                      </div>
-                    )
-                  })}
+                  {selCountryIds.map((id) => (
+                    <div key={id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-crusader-gold/5 transition-colors group">
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-crusader-gold/40" />
+                      <span className="text-[11px] text-crusader-gold/65 flex-1 truncate font-cinzel">
+                        {getCountryName(id)}
+                      </span>
+                      <button
+                        onClick={() => removeCountry(id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400/60 hover:text-red-400"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              </>
+            )}
+          </div>
 
-              {/* Footer */}
-              <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.97)' }}>
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-cinzel text-crusader-gold/40 uppercase tracking-widest whitespace-nowrap">Zones</span>
-                  <input
-                    type="range" min={2} max={200} value={zoneCount}
-                    onChange={(e) => setZoneCount(Number(e.target.value))}
-                    className="flex-1 accent-crusader-gold cursor-pointer"
-                  />
-                  <span className="text-[11px] font-cinzel font-bold text-crusader-gold w-6 text-right">{zoneCount}</span>
-                </div>
+          {/* Footer */}
+          <div className="shrink-0 px-5 py-4 border-t border-crusader-gold/10 space-y-2" style={{ background: 'rgba(6,5,3,0.97)' }}>
+            {selCountryIds.length > 0 && (
+              <Button fullWidth size="sm" variant="outline" icon={<X size={13} />} onClick={clearAll}>
+                Clear Selection
+              </Button>
+            )}
 
-                <Button
-                  fullWidth
-                  size="sm"
-                  variant="outline"
-                  icon={<ChevronLeft size={13} />}
-                  onClick={() => setView('globe')}
-                >
-                  Back to Globe
-                </Button>
+            {saveError && (
+              <p className="text-[10px] text-red-400/85 font-cinzel text-center leading-relaxed">{saveError}</p>
+            )}
 
-                {saveError && (
-                  <p className="text-[10px] text-red-400/85 font-cinzel text-center leading-relaxed">{saveError}</p>
-                )}
+            <Button
+              fullWidth
+              size="lg"
+              disabled={!canSave || saving}
+              loading={saving}
+              onClick={handleSave}
+              icon={<Save size={15} />}
+            >
+              {savedId ? 'Update Map' : 'Save & Publish Map'}
+            </Button>
 
-                <Button
-                  fullWidth
-                  size="lg"
-                  disabled={!canSave || saving}
-                  loading={saving}
-                  onClick={handleSave}
-                  icon={<Save size={15} />}
-                >
-                  Save &amp; Publish Map
-                </Button>
+            {!player && (
+              <p className="text-[10px] text-amber-400/60 text-center font-cinzel">Sign in to publish maps</p>
+            )}
+            {player && !meta.name.trim() && selCountryIds.length > 0 && (
+              <p className="text-[10px] text-crusader-gold/25 text-center font-cinzel">Enter a map name to publish</p>
+            )}
+          </div>
+        </div>
 
-                {!player && (
-                  <p className="text-[10px] text-amber-400/60 text-center font-cinzel">Sign in to publish maps</p>
-                )}
-                {player && !meta.name.trim() && (
-                  <p className="text-[10px] text-crusader-gold/25 text-center font-cinzel">Enter a map name to publish</p>
-                )}
-              </div>
-            </div>
-          </>
-        )}
       </main>
     </div>
   )
